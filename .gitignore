@@ -1,0 +1,16 @@
+*.exe
+*.exp
+*.ilk
+*.lib
+*.pdb
+
+*.o
+
+*.ini
+*.spv
+
+*.sublime*
+*.build_output
+
+/include
+/support

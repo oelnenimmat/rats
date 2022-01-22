@@ -1,0 +1,86 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+
+layout(set = 0, binding = 0, rgba8) uniform writeonly image2D result_image;
+
+layout(set = 0, binding = 1) uniform Camera
+{
+	mat4 view;
+} camera;
+
+layout(set = 2, binding = 0) uniform Lighting
+{
+	vec4 direct_direction;
+	vec4 direct_color;
+	vec4 ambient_color;
+
+	vec4 debug_options;
+} lighting;
+
+float get_max_distance()
+{
+	return lighting.debug_options.x;
+}	
+
+
+#define VOXEL_OCTREE_DATA_SET 1
+#define VOXEL_OCTREE_DATA_BINDING 0
+
+#define VOXEL_OCTREE_INFO_SET 1
+#define VOXEL_OCTREE_INFO_BINDING 1
+
+#include "raycast.glsl"
+#include "voxel_octree.glsl"
+
+Ray get_camera_ray()
+{
+	vec2 resolution = vec2(imageSize(result_image));
+	vec2 uv = gl_GlobalInvocationID.xy / resolution;
+	uv = uv * 2 - 1;
+	uv.x *= resolution.x / resolution.y;
+
+	Ray ray;
+	ray.origin = (camera.view * vec4(0,0,0,1)).xyz;
+	
+	ray.direction = normalize(vec3(uv, 1.6));
+	ray.direction = (camera.view * vec4(ray.direction, 0)).xyz;
+
+	ray.inverse_direction = 1.0 / ray.direction;
+
+	// ray.sign = ivec3(mix(sign(ray.direction), vec3(0,0,0), vec3(1,1,1)));
+
+	return ray;
+}
+
+void main()
+{
+
+	Ray camera_ray = get_camera_ray();
+
+	vec3 background_color;
+	{
+		vec3 dir = camera_ray.direction;
+
+
+		background_color = mix(dir, vec3(1,1,1), 0.7);
+		// float avg_value = (dir.x + dir.y + dir.z) / 3 / 2 + 0.5;
+		// // float avg_value = max(max(camera_ray.direction.x, camera_ray.direction.y), camera_ray.direction.z) / 2 + 0.5;
+		// avg_value = smoothstep(0,1, avg_value);
+		// avg_value = avg_value * 0.6 + 0.4;
+		// background_color = mix(background_color, vec3(avg_value, avg_value, avg_value), 0.6);
+	}
+	vec3 color = background_color;
+
+	vec4 ray_result_color = traverse_octree(camera_ray, get_max_distance(), true);
+
+	float src_alpha 			= ray_result_color.a;
+	float one_minus_src_alpha 	= 1.0 - src_alpha;
+	color = src_alpha * ray_result_color.rgb + one_minus_src_alpha * color;
+
+	ivec2 store_position = ivec2(gl_GlobalInvocationID.xy);
+	store_position.y = imageSize(result_image).y - store_position.y;
+	vec4 result = vec4(color, 1);    
+	imageStore(result_image, store_position, result);
+}
+
+
