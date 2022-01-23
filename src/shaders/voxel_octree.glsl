@@ -28,13 +28,13 @@ int get_child_offset(VoxelData data)
 	return data.material_child_offset.y;
 }
 
-layout(std430, set = VOXEL_OCTREE_DATA_SET, binding = VOXEL_OCTREE_DATA_BINDING) readonly buffer Voxels
+layout(std430, set = PER_FRAME_SET, binding = PER_FRAME_VOXEL_OCTREE_DATA) readonly buffer Voxels
 {
 	VoxelData data [];
 } voxels;
 
 
-layout(set = VOXEL_OCTREE_INFO_SET, binding = VOXEL_OCTREE_INFO_BINDING) readonly uniform VoxelInfo
+layout(set = PER_FRAME_SET, binding = PER_FRAME_VOXEL_OCTREE_INFO) readonly uniform VoxelInfo
 {
 	// xyz has 3 dimensions, and w/[3] has total elements in block, i.e. x*y*z
 	ivec4 max_octree_depth; // voxels_in_chunk;

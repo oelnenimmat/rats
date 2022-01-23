@@ -18,33 +18,22 @@
 // Todo(Leo) this is only that we don't have to deal with order of definitions right now
 #define USE_SOMETHING_ELSE_VIRTUAL_FRAME_COUNT 3
 
-struct UniformBufferCamera
-{
-	float transform[16];	
-};
-
 struct ComputeBuffer
 {
 	bool created = false;
 
+	VkDevice device;
+	VkDeviceMemory memory;
 	VkBuffer buffer;
-	VkDeviceMemory memory;
-	void * mapped_memory;
 
 	size_t size;
-};
+	size_t single_buffer_memory_size;
 
-using UniformBuffer = ComputeBuffer;
-
-struct ComputeBuffer2
-{
-	bool created = false;
-
-	VkDeviceMemory memory;
-	size_t size;
-
-	VkBuffer buffers [USE_SOMETHING_ELSE_VIRTUAL_FRAME_COUNT];
+	size_t buffer_offsets [USE_SOMETHING_ELSE_VIRTUAL_FRAME_COUNT];
 	void* mapped_memories [USE_SOMETHING_ELSE_VIRTUAL_FRAME_COUNT];
+
+	void create(Graphics * context, size_t size, GraphicsBufferType type);
+	void destroy();
 };
 
 struct VirtualFrame
@@ -68,15 +57,8 @@ struct VirtualFrame
 	VkImage compute_image;
 	VkImageView compute_image_view;
 
-	VkBuffer uniform_buffer;
-	VkDeviceMemory uniform_buffer_memory;
-	UniformBufferCamera * mapped_uniform_buffer;
+	VkDescriptorSet per_frame_descriptor_set;
 
-	VkDescriptorSet user_buffer_descriptor_set;
-	ComputeBuffer user_compute_buffer;
-	UniformBuffer user_uniform_buffer;
-
-	VkDescriptorSet extra_uniform_descriptor_set;
 
 	struct {
 		VkFramebuffer framebuffer;
@@ -126,7 +108,7 @@ struct Graphics
 	VkDescriptorPool 		compute_descriptor_pool;
 
 	VkDescriptorSetLayout compute_render_target_descriptor_set_layout; 
-	VkDescriptorSetLayout compute_user_buffer_descriptor_set_layout; 
+	VkDescriptorSetLayout per_frame_descriptor_set_layout; 
 	VkDescriptorSetLayout extra_uniform_buffer_descriptor_set_layout; 
 
 	VkCommandPool 		graphics_command_pool;
@@ -139,7 +121,7 @@ struct Graphics
 
 	// -----------------------------------------------------
 	
-	List<ComputeBuffer2> user_uniform_buffer_pool;
+	Array<ComputeBuffer> per_frame_buffers;
 
 	// -----------------------------------------------------
 
@@ -191,21 +173,21 @@ namespace
 	}
 	#define VULKAN_HANDLE_ERROR(operation) vulkan_handle_bad_result(operation, __FILE__, __LINE__);
 
-	// Todo(Leo): seems usable but im too tired to evaluate it now
-	// bool vulkan_handle_return_on_error(VkResult r, char const * file, int line)
-	// {
-	// 	if (r != VK_SUCCESS)
-	// 	{
-	// 		std::cout << "[VULKAN ERROR|file " << file << "|line " << line << "]: " << vulkan_error_cstring(r) << "(" << r << ")\n";
-	// 		return false;
-	// 	}
-	// 	return true;
-	// }
+	bool vulkan_handle_return_on_error(VkResult r, char const * file, int line)
+	{
+		if (r != VK_SUCCESS)
+		{
+			std::cout << "[VULKAN ERROR|file " << file << "|line " << line << "]: " << vulkan_error_cstring(r) << "(" << r << ")\n";
+			return false;
+		}
+		return true;
+	}
 
-	// #define VULKAN_RETURN_ERROR(operation) { VkResult r = operation; if (vulkan_handle_return_on_error(r, __FILE__, __LINE__) == false) {return r;}}
+	#define VULKAN_RETURN_ERROR(operation) { VkResult r = operation; if (vulkan_handle_return_on_error(r, __FILE__, __LINE__) == false) {return r;}}
+
 #else
 	#define VULKAN_HANDLE_ERROR(operation) operation
-	// #define VULKAN_RETURN_ERROR(operation) operation
+	#define VULKAN_RETURN_ERROR(operation) operation
 #endif
 
 #define VULKAN_UNHANDLED_ERROR(message) std::cout << "[VULKAN UNHANDLED ERROR|file " << __FILE__ << "|line " << __LINE__ << "]: " << message << "\n";
@@ -248,7 +230,6 @@ namespace
 	}
 }
 
-
 Graphics * create_graphics(Window const * window, Allocator * allocator)
 {
 	if (window_is_cool(window) == false)
@@ -283,56 +264,48 @@ Graphics * create_graphics(Window const * window, Allocator * allocator)
 	create_graphics_pipeline(context);
 	create_virtual_frames(context);
 
-	create_compute_pipeline(context);
-
-
-	context->user_uniform_buffer_pool = List<ComputeBuffer2>(20, *context->persistent_allocator);
-
 	std::cout << "[VULKAN]: initialized\n";
 
 	return context;
 }
 
-void clear_graphics(Graphics * graphics)
+void clear_graphics(Graphics * context)
 {
-	vkDeviceWaitIdle(graphics->device);
+	vkDeviceWaitIdle(context->device);
 
-	destroy_compute_pipeline(graphics);
+	for (auto & buffer : context->per_frame_buffers)
+	{
+		buffer.destroy();
+	}
+	destroy_compute_pipeline(context);
 
-	destroy_virtual_frames(graphics);
-	destroy_graphics_pipeline(graphics);
-	destroy_command_pool(graphics);
+	destroy_virtual_frames(context);
+	destroy_graphics_pipeline(context);
+	destroy_command_pool(context);
 
-	clear_swapchain(graphics);
-	vulkan_destroy_logical_device(graphics);
+	clear_swapchain(context);
+	vulkan_destroy_logical_device(context);
 	// Cleared implicitly with instance;
-	graphics->physical_device = VK_NULL_HANDLE;
+	context->physical_device = VK_NULL_HANDLE;
 	
-	vulkan_destroy_surface(graphics);
+	vulkan_destroy_surface(context);
 
 	#ifdef MY_ENGINE_DEBUG
-		vulkan_destroy_debug_messenger(graphics);
+		vulkan_destroy_debug_messenger(context);
 	#endif
 
-	vulkan_destroy_instance(graphics);
+	vulkan_destroy_instance(context);
 	
 	std::cout << "[VULKAN]: Cleared\n";
 }
 
-void destroy_graphics(Graphics * graphics, Allocator * allocator)
+void destroy_graphics(Graphics * context, Allocator * allocator)
 {
-	clear_graphics(graphics);
-	allocator->deallocate(graphics);
+	clear_graphics(context);
+	allocator->deallocate(context);
 
 	std::cout << "[VULKAN]: Destroyed\n";
 }
-
-bool bad_graphics_is_cool(Graphics const * graphics)
-{
-	// Todo(Leo): this is bad function now
-	return true;
-}
-
 
 void graphics_begin_frame(Graphics * g)
 {
@@ -356,8 +329,6 @@ void graphics_begin_frame(Graphics * g)
 	VULKAN_HANDLE_ERROR(vkBeginCommandBuffer(cmd, &begin_info));
 
 	// ---------------------------------------------------------------
-
-
 	
 
 	// auto render_pass_info = vk_render_pass_begin_info();
@@ -379,12 +350,6 @@ void graphics_begin_frame(Graphics * g)
 	// vkCmdBeginRenderPass(cmd, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
 	// imgui_begin_frame(g);
 
-}
-
-void graphics_set_camera(Graphics * context, float transform[16])
-{
-	auto * mapped = get_current_frame(context).mapped_uniform_buffer;
-	memcpy(mapped->transform, transform, sizeof(float) * 16);
 }
 
 void graphics_draw_frame(Graphics * context)
@@ -451,18 +416,8 @@ void graphics_draw_frame(Graphics * context)
 		cmd,
 		VK_PIPELINE_BIND_POINT_COMPUTE,
 		context->compute_pipeline_layout,
-		1, 1, &frame.user_buffer_descriptor_set, 0, nullptr
+		1, 1, &frame.per_frame_descriptor_set, 0, nullptr
 	);
-
-	if (frame.extra_uniform_descriptor_set != VK_NULL_HANDLE)
-	{
-		vkCmdBindDescriptorSets(
-			cmd,
-			VK_PIPELINE_BIND_POINT_COMPUTE,
-			context->compute_pipeline_layout,
-			2,1, &frame.extra_uniform_descriptor_set, 0, nullptr
-		);
-	}
 
 	vkCmdDispatch(cmd, context->render_target_width, context->render_target_height, 1);
 
@@ -571,200 +526,116 @@ void graphics_draw_frame(Graphics * context)
 
 }
 
+bool graphics_create_compute_pipeline(Graphics * context, GraphicsPipelineLayout * layout)
+{
+	create_compute_pipeline(context, layout);
+
+	return true;
+}
+
+bool graphics_create_user_buffer(Graphics * context, size_t size, GraphicsBufferType buffer_type, int buffer_index)
+{
+	ComputeBuffer & buffer = context->per_frame_buffers[buffer_index];
+
+	// 1: Create Buffer -------------------------------------------------------
+
+	if (buffer.created)
+	{
+		buffer.destroy();
+	}
+	buffer.create(context, size, buffer_type);
+
+	// 2: Write Descriptors ---------------------------------------------------
+
+	for (int i = 0; i < context->virtual_frame_count; i++)
+	{
+		VkDescriptorBufferInfo buffer_info { buffer.buffer, buffer.buffer_offsets[i], buffer.single_buffer_memory_size };
+
+		auto write = vk_write_descriptor_set(
+			context->virtual_frames[i].per_frame_descriptor_set,
+			buffer_index,
+			descriptor_type_from(buffer_type),
+			&buffer_info
+		);
+
+		vkUpdateDescriptorSets(context->device, 1, &write, 0, nullptr);
+	}
+
+	return true;
+}
+
+void graphics_write_user_buffer(Graphics * context, int buffer_index, size_t size, void * data)
+{
+	MY_ENGINE_ASSERT(buffer_index >= 0 && buffer_index < context->per_frame_buffers.length());
+
+	void * dst = context->per_frame_buffers[buffer_index].mapped_memories[context->current_frame_index];
+	memcpy(dst, data, size);
+}
+
 namespace
 {
-	void safe_clear_compute_buffer(VkDevice device, ComputeBuffer & buffer)
+	VkResult create_buffer(VkDevice device, size_t size, VkBufferUsageFlagBits usage, VkBuffer * out_buffer)
 	{
-		if(buffer.created)
-		{
-			vkUnmapMemory(device, buffer.memory);
-			vkDestroyBuffer(device, buffer.buffer, nullptr);
-			vkFreeMemory(device, buffer.memory, nullptr);
+		auto buffer_info = vk_buffer_create_info();
+		buffer_info.size = size;
+		buffer_info.usage = usage;
+		buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-			buffer = {};
-		}
+		return vkCreateBuffer(device, &buffer_info, nullptr, out_buffer);
 	}
 
-}	
-
-void graphics_create_user_buffers(Graphics * context, size_t compute_buffer_size, size_t uniform_buffer_size)
-{
-	for (VirtualFrame & frame : context->virtual_frames)
+	VkResult allocate_buffer_memory(Graphics const * context, VkBuffer buffer, VkDeviceMemory * out_memory)
 	{
-		vkWaitForFences(context->device, 1, &frame.in_use_fence, VK_TRUE, 0xFFFFFFFFu);
+		VkMemoryRequirements memory_requirements;
+		vkGetBufferMemoryRequirements(context->device, buffer, &memory_requirements);
 
-		ComputeBuffer & compute_buffer = frame.user_compute_buffer;
-
-		safe_clear_compute_buffer(context->device, compute_buffer);
-
-		VULKAN_HANDLE_ERROR(create_buffer(context, compute_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, &compute_buffer.buffer));
-		VULKAN_HANDLE_ERROR(allocate_buffer_memory(context, compute_buffer.buffer, &compute_buffer.memory));
-		VULKAN_HANDLE_ERROR(vkBindBufferMemory(context->device, compute_buffer.buffer, compute_buffer.memory, 0));
-
-		VULKAN_HANDLE_ERROR(vkMapMemory(context->device, compute_buffer.memory, 0, compute_buffer_size, 0, &compute_buffer.mapped_memory));
-		memset(compute_buffer.mapped_memory, 0, compute_buffer_size);
-
-		compute_buffer.size = compute_buffer_size;
-		compute_buffer.created = true;
-
-		// -------------------------------------------------------------------.
-
-		UniformBuffer & uniform_buffer = frame.user_uniform_buffer;
-
-		safe_clear_compute_buffer(context->device, uniform_buffer);
-		
-		VULKAN_HANDLE_ERROR(create_buffer(context, uniform_buffer_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &uniform_buffer.buffer));
-		VULKAN_HANDLE_ERROR(allocate_buffer_memory(context, uniform_buffer.buffer, &uniform_buffer.memory));
-		VULKAN_HANDLE_ERROR(vkBindBufferMemory(context->device, uniform_buffer.buffer, uniform_buffer.memory, 0));
-
-		VULKAN_HANDLE_ERROR(vkMapMemory(context->device, uniform_buffer.memory, 0, uniform_buffer_size, 0, &uniform_buffer.mapped_memory));
-		memset(uniform_buffer.mapped_memory, 0, uniform_buffer_size);
-
-		uniform_buffer.size = uniform_buffer_size;
-		uniform_buffer.created = true;
-	}
-
-	auto voxel_buffer_descriptor_allocate = vk_descriptor_set_allocate_info(
-		context->compute_descriptor_pool, 
-		1, 
-		&context->compute_user_buffer_descriptor_set_layout
-	);
-
-	for (int i = 0; i < context->virtual_frame_count; i++)
-	{
-		VirtualFrame & frame = context->virtual_frames[i];
-
-		VULKAN_HANDLE_ERROR(vkAllocateDescriptorSets(context->device, &voxel_buffer_descriptor_allocate, &frame.user_buffer_descriptor_set));
-
-		// Update descriptors
-		VkDescriptorBufferInfo compute_buffer_info = { frame.user_compute_buffer.buffer, 0, VK_WHOLE_SIZE };
-		VkDescriptorBufferInfo uniform_buffer_info = { frame.user_uniform_buffer.buffer, 0, VK_WHOLE_SIZE };
-		VkWriteDescriptorSet writes [] =
-		{
-			vk_write_descriptor_set(frame.user_buffer_descriptor_set, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &compute_buffer_info),
-			vk_write_descriptor_set(frame.user_buffer_descriptor_set, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &uniform_buffer_info),
-		};
-
-		vkUpdateDescriptorSets(context->device, array_length(writes), writes, 0, nullptr);
-	}
-}
-
-void graphics_write_user_compute_buffer(Graphics * context, size_t size, void * data)
-{
-	memcpy(get_current_frame(context).user_compute_buffer.mapped_memory, data, size);
-}
-
-void graphics_write_user_uniform_buffer(Graphics * context, size_t size, void * data)
-{
-	memcpy(get_current_frame(context).user_uniform_buffer.mapped_memory, data, size);
-}
-
-/*
-struct ComputeBuffer2
-{
-	bool created = false;
-
-	VkDeviceMemory memory;
-	size_t size;
-
-	Array<VkBuffer> buffers;
-	Array<void *>  	mapped_memories;
-};
-*/
-
-int graphics_create_uniform_buffer(Graphics * context, size_t size) // int set, int binding)
-{
-	int index = context->user_uniform_buffer_pool.length();
-	ComputeBuffer2 & buffer = context->user_uniform_buffer_pool.add_new();
-
-	VkMemoryRequirements memory_requirements[context->virtual_frame_count];
-	uint32_t memory_type_index;
-	VkDeviceSize single_buffer_memory_size;
-	for (int i = 0; i < context->virtual_frame_count; i++)
-	{
-		VULKAN_HANDLE_ERROR(create_buffer(context, size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &buffer.buffers[i]));
-		vkGetBufferMemoryRequirements(context->device, buffer.buffers[i], &memory_requirements[i]);
-
-		uint32_t memory_type_index_i = 	find_memory_type(
-			context, 
-			memory_requirements[i].memoryTypeBits,
+		auto allocate_info = vk_memory_allocate_info();
+		allocate_info.allocationSize = memory_requirements.size;
+		allocate_info.memoryTypeIndex = find_memory_type(
+			context->physical_device, 
+			memory_requirements.memoryTypeBits, 
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 		);
 
-		// Memory type must be same, buffers will share same memory object
-		if (i == 0)
-		{
-			memory_type_index 			= memory_type_index_i;
-			single_buffer_memory_size 	= memory_requirements[i].size;
-		}
-		else		
-		{
-			MY_ENGINE_ASSERT(memory_type_index_i == memory_type_index);
-			MY_ENGINE_ASSERT(single_buffer_memory_size == memory_requirements[i].size);
-		}
+		return vkAllocateMemory(context->device, &allocate_info, nullptr, out_memory);
 	}
+}
 
-	auto allocate_info = vk_memory_allocate_info();
-	allocate_info.allocationSize = single_buffer_memory_size * context->virtual_frame_count;
-	allocate_info.memoryTypeIndex = memory_type_index;
+void ComputeBuffer::create(Graphics * context, size_t size, GraphicsBufferType type)
+{
+	device = context->device;
 
-	VULKAN_HANDLE_ERROR(vkAllocateMemory(context->device, &allocate_info, nullptr, &buffer.memory));
+	size_t SWAG_alignment = 256;
+	single_buffer_memory_size = (size / SWAG_alignment + 1) * SWAG_alignment;
+	size_t total_size = single_buffer_memory_size * context->virtual_frame_count;
+
+	VULKAN_HANDLE_ERROR(create_buffer(device, total_size, buffer_usage_from(type), &buffer));
+	VULKAN_HANDLE_ERROR(allocate_buffer_memory(context, buffer, &memory));
+	VULKAN_HANDLE_ERROR(vkBindBufferMemory(device, buffer, memory, 0));
+
+	void * mapped_memory;
+	VULKAN_HANDLE_ERROR(vkMapMemory(device, memory, 0, VK_WHOLE_SIZE, 0, &mapped_memory));
 
 	for (int i = 0; i < context->virtual_frame_count; i++)
 	{
 		VkDeviceSize offset = i * single_buffer_memory_size;
-		VULKAN_HANDLE_ERROR(vkBindBufferMemory(context->device, buffer.buffers[i], buffer.memory, offset));
-		VULKAN_HANDLE_ERROR(vkMapMemory(
-			context->device,
-			buffer.memory,
-			offset,
-			single_buffer_memory_size,
-			0,
-			&buffer.mapped_memories[i]
-		));
+		buffer_offsets[i] = offset;
+		mapped_memories[i] = reinterpret_cast<uint8_t*>(mapped_memory) + offset;
 	}
 
-	buffer.size = size;
-	buffer.created = true;
+	size = size;
+	created = true;
+}
 
-	auto extra_buffer_descriptor_allocate = vk_descriptor_set_allocate_info(
-		context->compute_descriptor_pool, 
-		1, 
-		&context->extra_uniform_buffer_descriptor_set_layout
-	);
-
-
-	for (int i = 0; i < context->virtual_frame_count; i++)
+void ComputeBuffer::destroy()
+{
+	if (created == false)
 	{
-		VirtualFrame & frame = context->virtual_frames[i];
-
-		VULKAN_HANDLE_ERROR(vkAllocateDescriptorSets(context->device, &extra_buffer_descriptor_allocate, &frame.extra_uniform_descriptor_set));
-
-		// Update descriptors
-		VkDescriptorBufferInfo buffer_info = { buffer.buffers[i], 0, VK_WHOLE_SIZE };
-		VkWriteDescriptorSet writes [] =
-		{
-			vk_write_descriptor_set(frame.extra_uniform_descriptor_set, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &buffer_info),
-		};
-
-		vkUpdateDescriptorSets(context->device, array_length(writes), writes, 0, nullptr);
+		return;
 	}
 
+	vkFreeMemory(device, memory, nullptr);
+	vkDestroyBuffer(device, buffer, nullptr);
 
-	return index;
-}
-
-
-void graphics_destroy_uniform_buffer(Graphics * context, int buffer)
-{
-
-}
-
-void graphics_write_uniform_buffer(Graphics * context, int buffer_index, size_t size, void * data)
-{
-	ComputeBuffer2 & buffer = context->user_uniform_buffer_pool[buffer_index];
-
-	MY_ENGINE_ASSERT(size <= buffer.size);
-
-	memcpy(buffer.mapped_memories[context->current_frame_index], data, size);
+	*this = {};
 }

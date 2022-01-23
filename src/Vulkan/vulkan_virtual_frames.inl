@@ -1,9 +1,9 @@
 namespace
 {
-	uint32_t find_memory_type(Graphics const * g, uint32_t type_filter, VkMemoryPropertyFlags properties)
+	uint32_t find_memory_type(VkPhysicalDevice physical_device, uint32_t type_filter, VkMemoryPropertyFlags properties)
 	{
 		VkPhysicalDeviceMemoryProperties memory_properties;
-		vkGetPhysicalDeviceMemoryProperties(g->physical_device, &memory_properties);
+		vkGetPhysicalDeviceMemoryProperties(physical_device, &memory_properties);
 
 		for (uint32_t i = 0; i < memory_properties.memoryTypeCount; i++)
 		{
@@ -16,7 +16,7 @@ namespace
 			}
 		}
 
-		// Todo(Leo): shitty way to deal with error. Almost feel like time for errors....
+		// Todo(Leo): shitty way to deal with error. Almost feel like time for excpetions....
 		return -1;
 	}
 
@@ -55,7 +55,7 @@ namespace
 		auto allocate_info = vk_memory_allocate_info();
 		allocate_info.allocationSize = memory_requirements.size;
 		allocate_info.memoryTypeIndex = find_memory_type(
-			context,
+			context->physical_device,
 			memory_requirements.memoryTypeBits,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
 		);
@@ -63,31 +63,6 @@ namespace
 		return vkAllocateMemory(context->device, &allocate_info, nullptr, out_memory);
 	}
 
-	VkResult create_buffer(Graphics * context, size_t size, VkBufferUsageFlagBits usage, VkBuffer * out_buffer)
-	{
-		auto buffer_info = vk_buffer_create_info();
-		buffer_info.size = size;
-		buffer_info.usage = usage;
-		buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-		return vkCreateBuffer(context->device, &buffer_info, nullptr, out_buffer);
-	}
-
-	VkResult allocate_buffer_memory(Graphics const * context, VkBuffer buffer, VkDeviceMemory * out_memory)
-	{
-		VkMemoryRequirements memory_requirements;
-		vkGetBufferMemoryRequirements(context->device, buffer, &memory_requirements);
-
-		auto allocate_info = vk_memory_allocate_info();
-		allocate_info.allocationSize = memory_requirements.size;
-		allocate_info.memoryTypeIndex = find_memory_type(
-			context, 
-			memory_requirements.memoryTypeBits, 
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-		);
-
-		return vkAllocateMemory(context->device, &allocate_info, nullptr, out_memory);
-	}
 
 	// VkResult allocate_multiple_buffer_memory(Graphics const * context, int buffer_count, VkBuffer * buffers, VkDeviceMemory * out_memory)
 	// {
@@ -196,18 +171,6 @@ namespace
 				VULKAN_HANDLE_ERROR(create_image_view(context->device, frame.compute_image, compute_image_format, &frame.compute_image_view));
 
 				// Note(Leo): we can leave image layout at undefined, we are transitioning it at the beginning of each frame anyway
-
-				// ------------------------------------------------------------
-				
-				{
-					size_t size = sizeof(UniformBufferCamera);
-
-					VULKAN_HANDLE_ERROR(create_buffer(context, size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &frame.uniform_buffer));
-					VULKAN_HANDLE_ERROR(allocate_buffer_memory(context, frame.uniform_buffer, &frame.uniform_buffer_memory));
-					VULKAN_HANDLE_ERROR(vkBindBufferMemory(context->device, frame.uniform_buffer, frame.uniform_buffer_memory, 0));
-
-					VULKAN_HANDLE_ERROR(vkMapMemory(context->device, frame.uniform_buffer_memory, 0, size, 0, reinterpret_cast<void**>(&frame.mapped_uniform_buffer)));
-				}
 			}
 		}
 	}
@@ -234,15 +197,6 @@ namespace
 			vkDestroyImageView(device, frame.compute_image_view, nullptr);
 			vkDestroyImage(device, frame.compute_image, nullptr);
 			vkFreeMemory(device, frame.compute_image_memory, nullptr);
-
-			vkUnmapMemory(device, frame.uniform_buffer_memory);
-			vkDestroyBuffer(device, frame.uniform_buffer, nullptr);
-			vkFreeMemory(device, frame.uniform_buffer_memory, nullptr);
-
-			void safe_clear_compute_buffer(VkDevice, ComputeBuffer&);
-
-			safe_clear_compute_buffer(device, frame.user_compute_buffer);
-			safe_clear_compute_buffer(device, frame.user_uniform_buffer);
 		}
 		context->virtual_frames.dispose();
 	}

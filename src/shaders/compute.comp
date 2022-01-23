@@ -3,31 +3,33 @@
 
 layout(set = 0, binding = 0, rgba8) uniform writeonly image2D result_image;
 
-layout(set = 0, binding = 1) uniform Camera
+
+#define PER_FRAME_SET 1
+
+#define PER_FRAME_VOXEL_OCTREE_DATA 0
+#define PER_FRAME_VOXEL_OCTREE_INFO 1
+#define PER_FRAME_CAMERA 2
+#define PER_FRAME_LIGHTING 3
+
+layout(set = PER_FRAME_SET, binding = PER_FRAME_CAMERA) uniform Camera
 {
 	mat4 view;
+	vec4 max_distance;
 } camera;
 
-layout(set = 2, binding = 0) uniform Lighting
+layout(set = PER_FRAME_SET, binding = PER_FRAME_LIGHTING) uniform Lighting
 {
 	vec4 direct_direction;
 	vec4 direct_color;
 	vec4 ambient_color;
-
-	vec4 debug_options;
 } lighting;
 
 float get_max_distance()
 {
-	return lighting.debug_options.x;
+	return camera.max_distance.x;
 }	
 
 
-#define VOXEL_OCTREE_DATA_SET 1
-#define VOXEL_OCTREE_DATA_BINDING 0
-
-#define VOXEL_OCTREE_INFO_SET 1
-#define VOXEL_OCTREE_INFO_BINDING 1
 
 #include "raycast.glsl"
 #include "voxel_octree.glsl"
@@ -73,7 +75,7 @@ void main()
 
 	vec4 ray_result_color = traverse_octree(camera_ray, get_max_distance(), true);
 
-	float src_alpha 			= ray_result_color.a;
+	float src_alpha 			= clamp(ray_result_color.a, 0, 1);
 	float one_minus_src_alpha 	= 1.0 - src_alpha;
 	color = src_alpha * ray_result_color.rgb + one_minus_src_alpha * color;
 

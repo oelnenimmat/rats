@@ -340,6 +340,11 @@ void load_imgui_style_from_json()
 	load_from_json(ImGui::GetStyle(), "data/imgui_style.json");
 }
 
+struct CameraData
+{
+	float4x4 view_matrix;
+	float4 max_distance;
+};
 
 void run_engine(Window * window, Graphics * graphics, Input * input)
 {
@@ -356,6 +361,40 @@ void run_engine(Window * window, Graphics * graphics, Input * input)
 
 		that means, that create those from here, or initialize_engine
 	*/
+
+	// GraphicsPipelineBufferCreateInfo
+
+	// GraphicsComputePipelineCreateInfo info = {};
+
+	std::cout << "[ENGINE]: before create compute pipeline\n";
+
+	// Note(Leo): defines in compute.comp must match these
+	enum : int
+	{
+		voxel_octree_buffer,
+		voxel_octree_info_buffer,
+		camera_buffer,
+		lighting_buffer,
+
+		per_frame_buffer_count
+	};
+
+	GraphicsBufferType buffer_types [per_frame_buffer_count];
+	buffer_types[voxel_octree_buffer] 		= GraphicsBufferType::compute;
+	buffer_types[voxel_octree_info_buffer] 	= GraphicsBufferType::uniform;
+	buffer_types[camera_buffer] 			= GraphicsBufferType::uniform;
+	buffer_types[lighting_buffer] 			= GraphicsBufferType::uniform;
+
+	GraphicsPipelineLayout layout = {};
+	layout.per_frame_buffer_count = per_frame_buffer_count;
+	layout.per_frame_buffer_types = buffer_types;
+
+	bool ok = graphics_create_compute_pipeline(graphics, &layout);
+	MY_ENGINE_ASSERT(ok);
+
+
+	std::cout << "[ENGINE]: after create compute pipeline\n";
+
 
 	Engine engine = initialize_engine();
 	engine.camera.enabled = false;
@@ -377,11 +416,10 @@ void run_engine(Window * window, Graphics * graphics, Input * input)
 		engine.world_settings.colors
 	);
 
-	graphics_create_user_buffers(graphics, octree.nodes.memory_size(), sizeof(OctreeInfo));
-
-	// -------------------------------------------------------------------------------------------------
-
-	int light_buffer = graphics_create_uniform_buffer(graphics, sizeof(LightData));
+	ok = graphics_create_user_buffer(graphics, octree.nodes.memory_size(), GraphicsBufferType::compute, voxel_octree_buffer);	MY_ENGINE_ASSERT(ok);
+	ok = graphics_create_user_buffer(graphics, sizeof(OctreeInfo), GraphicsBufferType::uniform, voxel_octree_info_buffer);		MY_ENGINE_ASSERT(ok);
+	ok = graphics_create_user_buffer(graphics, sizeof(CameraData), GraphicsBufferType::uniform, camera_buffer);					MY_ENGINE_ASSERT(ok);
+	ok = graphics_create_user_buffer(graphics, sizeof(LightData), GraphicsBufferType::uniform, lighting_buffer);				MY_ENGINE_ASSERT(ok);
 
 	// -------------------------------------------------------------------------------------------------
 
@@ -526,45 +564,27 @@ void run_engine(Window * window, Graphics * graphics, Input * input)
 		// issue rendering
 		graphics_begin_frame(graphics);
 
-		if (engine.camera_mode == CameraMode::editor)
-		{
-			graphics_set_camera(graphics, engine.camera.view_matrix.values);
-		}
-		else
-		{
-			graphics_set_camera(graphics, engine.game_camera.view_matrix.values);
-		}
-
-		TIMER_BEGIN(front_buffer_copy);
 		size_t octree_memory_size = sizeof(OctreeNode) * temp_octree.used_node_count;
-		graphics_write_user_compute_buffer(graphics, octree_memory_size, temp_octree.nodes.get_memory_ptr());
-		TIMER_END(timings, front_buffer_copy);
-
 
 		OctreeInfo octree_info = {};
 		octree_info.max_depth() = engine.voxel_settings.draw_octree_depth;
 		octree_info.world_min.xyz = float3(0,0,0);
 		octree_info.world_max.xyz = float3(10,10,10);
 
-		graphics_write_user_uniform_buffer(
-			graphics,
-			sizeof octree_info,
-			&octree_info
-		);
-
 		LightData light_data = engine.light_settings.get_light_data();
-		light_data.debug_options = float4(
-			engine.debug_options.a, // max_distance
-			engine.debug_options.b,
-			engine.debug_options.c,
-			engine.debug_options.d
-		);
-		graphics_write_uniform_buffer(
-			graphics,
-			light_buffer,
-			sizeof light_data,
-			&light_data
-		);
+		
+		CameraData camera_data;
+		camera_data.view_matrix = engine.camera_mode == CameraMode::editor ? engine.camera.view_matrix : engine.game_camera.view_matrix; 
+		camera_data.max_distance = float4(engine.debug_options.a, 0, 0, 0);
+
+		TIMER_BEGIN(front_buffer_copy);
+
+		graphics_write_user_buffer(graphics, voxel_octree_buffer, octree_memory_size, temp_octree.nodes.get_memory_ptr());
+		graphics_write_user_buffer(graphics, voxel_octree_info_buffer, sizeof octree_info, &octree_info);
+		graphics_write_user_buffer(graphics, camera_buffer,	sizeof camera_data, &camera_data);
+		graphics_write_user_buffer(graphics, lighting_buffer, sizeof light_data, &light_data);
+
+		TIMER_END(timings, front_buffer_copy);
 
 		graphics_draw_frame(graphics);
 

@@ -7,7 +7,6 @@ struct LightData
 	float4 direct_direction;
 	float4 direct_color;
 	float4 ambient_color;
-	float4 debug_options;
 };
 
 struct LightSettings

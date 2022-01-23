@@ -56,8 +56,40 @@ namespace
 		return info;
 	}
 
-	void create_compute_pipeline(Graphics * context)
+	VkDescriptorType descriptor_type_from(GraphicsBufferType type)
+	{
+		switch(type)
+		{
+			case GraphicsBufferType::compute: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			case GraphicsBufferType::uniform: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		};
+
+		MY_ENGINE_ASSERT(false);
+	}
+
+	VkBufferUsageFlagBits buffer_usage_from(GraphicsBufferType type)
+	{
+		switch(type)
+		{
+			case GraphicsBufferType::compute: return VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+			case GraphicsBufferType::uniform: return VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+		};
+
+		MY_ENGINE_ASSERT(false);	
+	}
+
+
+	void create_compute_pipeline(Graphics * context, GraphicsPipelineLayout * layout)
 	{	
+		// Mockup arguments
+
+		int per_frame_buffer_count 					= layout->per_frame_buffer_count;
+		GraphicsBufferType * per_frame_buffer_types = layout->per_frame_buffer_types;
+
+		context->per_frame_buffers = Array<ComputeBuffer>(per_frame_buffer_count, *context->persistent_allocator, AllocationType::zero_memory);
+
+		// -------------------------------------------------------------
+		
 		auto shader_binary = read_shader_file("shaders/compute.spv");
 		VkShaderModule shader_module;
 		VULKAN_HANDLE_ERROR(create_shader_module(context->device, shader_binary, &shader_module));
@@ -72,34 +104,24 @@ namespace
 		VkDescriptorSetLayoutBinding render_target_bindings [] =
 		{
 			{0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-			{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}
 		};
 
-		auto render_target_layout_info = vk_descriptor_set_layout_create_info(2, render_target_bindings);
+		auto render_target_layout_info = vk_descriptor_set_layout_create_info(array_length(render_target_bindings), render_target_bindings);
 		VULKAN_HANDLE_ERROR(vkCreateDescriptorSetLayout(context->device, &render_target_layout_info, nullptr, &context->compute_render_target_descriptor_set_layout));
 
-		VkDescriptorSetLayoutBinding voxel_buffer_bindings [] =
+		auto per_frame_buffer_bindings = Array<VkDescriptorSetLayoutBinding>(per_frame_buffer_count, global_debug_allocator);
+		for (int i = 0; i < per_frame_buffer_count; i++)
 		{
-			{0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-			{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
-		};
+			per_frame_buffer_bindings[i] = {(uint32_t)i, descriptor_type_from(per_frame_buffer_types[i]), 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+		}
 
-		auto voxel_buffer_layout_info = vk_descriptor_set_layout_create_info(2, voxel_buffer_bindings);
-		VULKAN_HANDLE_ERROR(vkCreateDescriptorSetLayout(context->device, &voxel_buffer_layout_info, nullptr, &context->compute_user_buffer_descriptor_set_layout));
-
-		VkDescriptorSetLayoutBinding extra_uniform_bindings [] =
-		{
-			{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr }
-		};
-
-		auto extra_uniform_layout_info = vk_descriptor_set_layout_create_info(array_length(extra_uniform_bindings), extra_uniform_bindings);
-		VULKAN_HANDLE_ERROR(vkCreateDescriptorSetLayout(context->device, &extra_uniform_layout_info, nullptr, &context->extra_uniform_buffer_descriptor_set_layout));
+		auto per_frame_layout_info = vk_descriptor_set_layout_create_info(per_frame_buffer_count, per_frame_buffer_bindings.get_memory_ptr());
+		VULKAN_HANDLE_ERROR(vkCreateDescriptorSetLayout(context->device, &per_frame_layout_info, nullptr, &context->per_frame_descriptor_set_layout));
 
 		VkDescriptorSetLayout compute_set_layouts [] = 
 		{
 			context->compute_render_target_descriptor_set_layout,
-			context->compute_user_buffer_descriptor_set_layout,
-			context->extra_uniform_buffer_descriptor_set_layout,
+			context->per_frame_descriptor_set_layout,
 		};
 
 		auto pipeline_layout_info = vk_pipeline_layout_create_info();
@@ -119,7 +141,7 @@ namespace
 		
 		// -------------------------------------------------------------
 
-		// Todo(Leo): not random
+		// Todo(Leo): make not random
 		uint32_t random_descriptor_count = 50;
 		VkDescriptorPoolSize pool_sizes [] = 
 		{
@@ -149,24 +171,28 @@ namespace
 			VirtualFrame & frame = context->virtual_frames[i];
 
 			VULKAN_HANDLE_ERROR(vkAllocateDescriptorSets(context->device, &render_target_descriptor_allocate, &frame.render_target_descriptor_set));
-
+		
 			VkDescriptorImageInfo image_info = { VK_NULL_HANDLE, frame.compute_image_view, VK_IMAGE_LAYOUT_GENERAL };
-			VkDescriptorBufferInfo uniform_buffer_info = { frame.uniform_buffer, 0, VK_WHOLE_SIZE };
-
-
-
-
-			// VkDescriptorBufferInfo buffer_info = { frame.voxel_buffer, 0, VK_WHOLE_SIZE };
-			// VkDescriptorBufferInfo info_buffer_info = { frame.voxel_info_buffer, 0, VK_WHOLE_SIZE };
 
 			VkWriteDescriptorSet writes[] =
 			{
 				// render target
 				vk_write_descriptor_set(frame.render_target_descriptor_set, 0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &image_info),
-				vk_write_descriptor_set(frame.render_target_descriptor_set, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &uniform_buffer_info),
 			};
 
 			vkUpdateDescriptorSets(context->device, array_length(writes), writes, 0, nullptr);
+		}
+		
+		// Note(Leo): These are only allocated here, they are written once the buffers are created
+		auto voxel_buffer_descriptor_allocate = vk_descriptor_set_allocate_info(
+			context->compute_descriptor_pool, 
+			1, 
+			&context->per_frame_descriptor_set_layout
+		);
+		
+		for (auto & frame : context->virtual_frames)
+		{
+			VULKAN_HANDLE_ERROR(vkAllocateDescriptorSets(context->device, &voxel_buffer_descriptor_allocate, &frame.per_frame_descriptor_set));
 		}
 	}	
 
@@ -175,7 +201,7 @@ namespace
 		vkDestroyDescriptorPool(context->device, context->compute_descriptor_pool, nullptr);
 		// vkDestroyDescriptorSetLayout(context->device, context->compute_descriptor_set_layoyt, nullptr);
 		vkDestroyDescriptorSetLayout(context->device, context->compute_render_target_descriptor_set_layout, nullptr);
-		vkDestroyDescriptorSetLayout(context->device, context->compute_user_buffer_descriptor_set_layout, nullptr);
+		vkDestroyDescriptorSetLayout(context->device, context->per_frame_descriptor_set_layout, nullptr);
 		vkDestroyPipelineLayout(context->device, context->compute_pipeline_layout, nullptr);
 		vkDestroyPipeline(context->device, context->compute_pipeline, nullptr);
 	}
