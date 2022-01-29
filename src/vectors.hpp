@@ -30,178 +30,90 @@ union int4;
 
 // ----------------------------------------------------------------------------
 
-inline void to_json(nlohmann::json & json, float2 const & v)
+inline SERIALIZE_STRUCT(float2 const & v)
 {
-	json["x"] = v.x;
-	json["y"] = v.y;
+	serializer.write("x", v.x);
+	serializer.write("y", v.y);
 }
 
-inline void to_json(nlohmann::json & json, float3 const & v)
+inline SERIALIZE_STRUCT(float3 const & v)
 {
-	json["x"] = v.x;
-	json["y"] = v.y;
-	json["z"] = v.z;
+	serializer.write("x", v.x);
+	serializer.write("y", v.y);
+	serializer.write("z", v.z);
 }
 
-inline void to_json(nlohmann::json & json, float4 const & v)
+inline SERIALIZE_STRUCT(float4 const & v)
 {
-	json["x"] = v.x;
-	json["y"] = v.y;
-	json["z"] = v.z;
-	json["w"] = v.w;
+	serializer.write("x", v.x);
+	serializer.write("y", v.y);
+	serializer.write("z", v.z);
+	serializer.write("w", v.w);
 }
 
-inline void to_json(nlohmann::json & json, int2 const & v)
+inline DESERIALIZE_STRUCT(float2 & v)
 {
-	json["x"] = v.x;
-	json["y"] = v.y;
+	serializer.read("x", v.x);
+	serializer.read("y", v.y);
 }
 
-inline void to_json(nlohmann::json & json, int3 const & v)
+inline DESERIALIZE_STRUCT(float3 & v)
 {
-	json["x"] = v.x;
-	json["y"] = v.y;
-	json["z"] = v.z;
+	serializer.read("x", v.x);
+	serializer.read("y", v.y);
+	serializer.read("z", v.z);
 }
 
-inline void to_json(nlohmann::json & json, int4 const & v)
+inline DESERIALIZE_STRUCT(float4 & v)
 {
-	json["x"] = v.x;
-	json["y"] = v.y;
-	json["z"] = v.z;
-	json["w"] = v.w;
-}
-
-// ----------------------------------------------------------------------------
-
-inline void from_json(nlohmann::json const & json, float2 & v)
-{
-	v.x = json["x"];
-	v.y = json["y"];
-}
-
-inline void from_json(nlohmann::json const & json, float3 & v)
-{
-	v.x = json["x"];
-	v.y = json["y"];
-	v.z = json["z"];
-}
-
-inline void from_json(nlohmann::json const & json, float4 & v)
-{
-	v.x = json["x"];
-	v.y = json["y"];
-	v.z = json["z"];
-	v.w = json["w"];
-}
-
-inline void from_json(nlohmann::json const & json, int2 & v)
-{
-	v.x = json["x"];
-	v.y = json["y"];
-}
-
-inline void from_json(nlohmann::json const & json, int3 & v)
-{
-	v.x = json["x"];
-	v.y = json["y"];
-	v.z = json["z"];
-}
-
-inline void from_json(nlohmann::json const & json, int4 & v)
-{
-	v.x = json["x"];
-	v.y = json["y"];
-	v.z = json["z"];
-	v.w = json["w"];
+	serializer.read("x", v.x);
+	serializer.read("y", v.y);
+	serializer.read("z", v.z);
+	serializer.read("w", v.w);
 }
 
 // ----------------------------------------------------------------------------
 
-inline void serialize(float2 const & v, Serializer & s)
+inline SERIALIZE_STRUCT(int2 const & v)
 {
-	s.write(v.x, "x");
-	s.write(v.y, "y");
+	serializer.write("x", v.x);
+	serializer.write("y", v.y);
 }
 
-inline void serialize(float3 const & v, Serializer & s)
+inline SERIALIZE_STRUCT(int3 const & v)
 {
-	s.write(v.x, "x");
-	s.write(v.y, "y");
-	s.write(v.z, "z");
+	serializer.write("x", v.x);
+	serializer.write("y", v.y);
+	serializer.write("z", v.z);
 }
 
-inline void serialize(float4 const & v, Serializer & s)
+inline SERIALIZE_STRUCT(int4 const & v)
 {
-	s.write(v.x, "x");
-	s.write(v.y, "y");
-	s.write(v.z, "z");
-	s.write(v.w, "w");
+	serializer.write("x", v.x);
+	serializer.write("y", v.y);
+	serializer.write("z", v.z);
+	serializer.write("w", v.w);
 }
 
-inline void deserialize(float2 & v, Serializer const & s)
+inline DESERIALIZE_STRUCT(int2 & v)
 {
-	s.read(v.x, "x");
-	s.read(v.y, "y");
+	serializer.read("x", v.x);
+	serializer.read("y", v.y);
 }
 
-inline void deserialize(float3 & v, Serializer const & s)
+inline DESERIALIZE_STRUCT(int3 & v)
 {
-	s.read(v.x, "x");
-	s.read(v.y, "y");
-	s.read(v.z, "z");
+	serializer.read("x", v.x);
+	serializer.read("y", v.y);
+	serializer.read("z", v.z);
 }
 
-inline void deserialize(float4 & v, Serializer const & s)
+inline DESERIALIZE_STRUCT(int4 & v)
 {
-	s.read(v.x, "x");
-	s.read(v.y, "y");
-	s.read(v.z, "z");
-	s.read(v.w, "w");
-}
-
-// ----------------------------------------------------------------------------
-
-inline void serialize(int2 const & v, Serializer & s)
-{
-	s.write(v.x, "x");
-	s.write(v.y, "y");
-}
-
-inline void serialize(int3 const & v, Serializer & s)
-{
-	s.write(v.x, "x");
-	s.write(v.y, "y");
-	s.write(v.z, "z");
-}
-
-inline void serialize(int4 const & v, Serializer & s)
-{
-	s.write(v.x, "x");
-	s.write(v.y, "y");
-	s.write(v.z, "z");
-	s.write(v.w, "w");
-}
-
-inline void deserialize(int2 & v, Serializer const & s)
-{
-	s.read(v.x, "x");
-	s.read(v.y, "y");
-}
-
-inline void deserialize(int3 & v, Serializer const & s)
-{
-	s.read(v.x, "x");
-	s.read(v.y, "y");
-	s.read(v.z, "z");
-}
-
-inline void deserialize(int4 & v, Serializer const & s)
-{
-	s.read(v.x, "x");
-	s.read(v.y, "y");
-	s.read(v.z, "z");
-	s.read(v.w, "w");
+	serializer.read("x", v.x);
+	serializer.read("y", v.y);
+	serializer.read("z", v.z);
+	serializer.read("w", v.w);
 }
 
 // Sketch on how to implement swizzles if we want to

@@ -1,3 +1,5 @@
+#pragma once
+
 using uint = unsigned int;
 
 struct SmallXXHash

@@ -17,8 +17,8 @@ struct LowLevelArray
 		_data(allocator.allocate<T>(length)),
 		_allocator(&allocator)
 	{
-		MY_ENGINE_ASSERT(_length > 0);
-		MY_ENGINE_ASSERT(_data != nullptr);
+		MINIMA_ASSERT(_length > 0);
+		MINIMA_ASSERT(_data != nullptr);
 	}
 
 	LowLevelArray(LowLevelArray const & other) = default;
@@ -36,7 +36,7 @@ struct LowLevelArray
 
 	LowLevelArray & operator = (LowLevelArray && old)
 	{
-		MY_ENGINE_ASSERT(empty());
+		MINIMA_ASSERT(empty());
 
 		_length = old._length;
 		_data = old._data;
@@ -51,7 +51,7 @@ struct LowLevelArray
 
 	bool empty() const
 	{ 
-		MY_ENGINE_ASSERT(
+		MINIMA_ASSERT(
 			(_length == 0 && _data == nullptr && _allocator == nullptr)
 			|| (_length > 0 && _data != nullptr && _allocator != nullptr)
 		);
@@ -61,7 +61,7 @@ struct LowLevelArray
 
 	void dispose()
 	{
-		MY_ENGINE_ASSERT(empty() == false);
+		MINIMA_ASSERT(empty() == false);
 
 		_allocator->deallocate(_data);
 
@@ -72,13 +72,13 @@ struct LowLevelArray
 
 	T & operator[](int index)
 	{ 
-		MY_ENGINE_ASSERT(index < _length);
+		MINIMA_ASSERT(index < _length);
 		return _data[index];
 	}
 
 	T const & operator[](int index) const
 	{ 
-		MY_ENGINE_ASSERT(index < _length);
+		MINIMA_ASSERT(index < _length);
 		return _data[index];
 	}
 

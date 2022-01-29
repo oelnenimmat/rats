@@ -50,9 +50,9 @@ struct Array
 	// disposed previously
 	void operator = (Array && old)
 	{
-		MY_ENGINE_ASSERT(_length == 0);
-		MY_ENGINE_ASSERT(_memory == nullptr);
-		MY_ENGINE_ASSERT(_allocator == nullptr);
+		MINIMA_ASSERT(_length == 0);
+		MINIMA_ASSERT(_memory == nullptr);
+		MINIMA_ASSERT(_allocator == nullptr);
 
 		_length = old._length;
 		_memory = old._memory;
@@ -77,7 +77,7 @@ struct Array
 		_memory(allocator.allocate<T>(length)),
 		_allocator(&allocator)
 	{
-		MY_ENGINE_ASSERT(_memory != nullptr);
+		MINIMA_ASSERT(_memory != nullptr);
 
 		switch(allocation_type)
 		{
@@ -106,32 +106,32 @@ struct Array
 
 	const T & operator[](size_t index) const
 	{
-		MY_ENGINE_ASSERT(_memory !=nullptr);
-		MY_ENGINE_ASSERT(index < _length);
+		MINIMA_ASSERT(_memory !=nullptr);
+		MINIMA_ASSERT(index < _length);
 
 		return _memory[index];
 	}
 
 	T & operator[](size_t index)
 	{
-		MY_ENGINE_ASSERT(_memory !=nullptr);
-		MY_ENGINE_ASSERT(index < _length);
+		MINIMA_ASSERT(_memory !=nullptr);
+		MINIMA_ASSERT(index < _length);
 
 		return _memory[index];
 	}
 	
 	void clear_memory()
 	{
-		MY_ENGINE_ASSERT(_length > 0);
-		MY_ENGINE_ASSERT(_memory != nullptr);
+		MINIMA_ASSERT(_length > 0);
+		MINIMA_ASSERT(_memory != nullptr);
 
 		memset(_memory, 0, sizeof(T) * _length);
 	}
 
 	void dispose()
 	{
-		MY_ENGINE_ASSERT(_memory != nullptr);
-		MY_ENGINE_ASSERT(_allocator != nullptr);
+		MINIMA_ASSERT(_memory != nullptr);
+		MINIMA_ASSERT(_allocator != nullptr);
 		
 		_allocator->deallocate(_memory);
 

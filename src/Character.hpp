@@ -5,6 +5,7 @@
 #include "Noise.hpp"
 #include "jobs.hpp"
 #include "DebugTerrain.hpp"
+#include "GameCamera.hpp"
 
 struct CharacterInput
 {
@@ -73,27 +74,28 @@ struct Character
 	float3 color;
 };
 
-inline void to_json(nlohmann::json & json, Character const & c)
+inline SERIALIZE_STRUCT(Character const & character)
 {
-	json["position"] = c.position;
-	json["speed"] = c.speed;
-	json["y_position"] = c.y_position;
-	json["y_velocity"] = c.y_velocity;
-	json["jump_power"] = c.jump_power;
-	json["size"] = c.size;
-	json["color"] = c.color;
+	serializer.write("position", character.position);
+	serializer.write("speed", character.speed);
+	serializer.write("y_position", character.y_position);
+	serializer.write("y_velocity", character.y_velocity);
+	serializer.write("jump_power", character.jump_power);
+	serializer.write("size", character.size);
+	serializer.write("color", character.color);
 }
 
-inline void from_json(nlohmann::json const & json, Character & c)
+inline DESERIALIZE_STRUCT(Character & character)
 {
-	get_if_value_exists(json, "position", c.position);
-	get_if_value_exists(json, "speed", c.speed);
-	get_if_value_exists(json, "y_position", c.y_position);
-	get_if_value_exists(json, "y_velocity", c.y_velocity);
-	get_if_value_exists(json, "jump_power", c.jump_power);
-	get_if_value_exists(json, "size", c.size);
-	get_if_value_exists(json, "color", c.color);
+	serializer.read("position", character.position);
+	serializer.read("speed", character.speed);
+	serializer.read("y_position", character.y_position);
+	serializer.read("y_velocity", character.y_velocity);
+	serializer.read("jump_power", character.jump_power);
+	serializer.read("size", character.size);
+	serializer.read("color", character.color);
 }
+
 
 namespace gui
 {

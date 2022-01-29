@@ -10,8 +10,8 @@ struct Slice
 
 	const T & operator[](size_t index)
 	{
-		MY_ENGINE_ASSERT(_memory !=nullptr);
-		MY_ENGINE_ASSERT(index < _length);
+		MINIMA_ASSERT(_memory !=nullptr);
+		MINIMA_ASSERT(index < _length);
 
 		return _memory[index];
 	}
@@ -36,7 +36,7 @@ struct Slice3D
 	{
 		#ifdef MY_ENGINE_DEBUG
 			int3 bound = _data_offset + _sizes;
-			MY_ENGINE_ASSERT(
+			MINIMA_ASSERT(
 				bound.x <= _data_sizes.x 
 				&& bound.y <= _data_sizes.y 
 				&& bound.z <= _data_sizes.z

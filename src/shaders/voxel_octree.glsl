@@ -243,22 +243,24 @@ vec4 traverse_octree(const Ray ray, float max_distance)
 				int LS_to_VS 	= 1 << (max_octree_depth - local_depth);
 				float LS_to_WS 	= LS_to_VS * VS_to_WS.x;
 
+				float normal_offset = get_normal_offset();
+
 				Ray new_ray_0;
 				vec3 normal_0 = data.normal.xyz + random_direction(position_WS) * get_roughness();
 				new_ray_0.direction = normalize(reflect(ray.direction, normal_0));
-				new_ray_0.origin = (vec3(voxel) * VS_to_WS + 1.0 * LS_to_WS * new_ray_0.direction);
+				new_ray_0.origin = ((vec3(voxel) + vec3(0.5, 0.5, 0.5)) * VS_to_WS + normal_offset * LS_to_WS * new_ray_0.direction);
 				new_ray_0.inverse_direction = 1.0 / new_ray_0.direction;
 				
 				Ray new_ray_1;
 				vec3 normal_1 = data.normal.xyz + random_direction(position_WS.yzx) * get_roughness();
 				new_ray_1.direction = normalize(reflect(ray.direction, normal_1));
-				new_ray_1.origin = (vec3(voxel) * VS_to_WS + 1.0 * LS_to_WS * new_ray_1.direction);
+				new_ray_1.origin = (vec3(voxel) * VS_to_WS + normal_offset * LS_to_WS * new_ray_1.direction);
 				new_ray_1.inverse_direction = 1.0 / new_ray_1.direction;
 				
 				Ray new_ray_2;
 				vec3 normal_2 = data.normal.xyz + random_direction(position_WS.zxy) * get_roughness();
 				new_ray_2.direction = normalize(reflect(ray.direction, normal_2));
-				new_ray_2.origin = (vec3(voxel) * VS_to_WS + 1.0 * LS_to_WS * new_ray_2.direction);
+				new_ray_2.origin = (vec3(voxel) * VS_to_WS + normal_offset * LS_to_WS * new_ray_2.direction);
 				new_ray_2.inverse_direction = 1.0 / new_ray_2.direction;
 
 				vec3 direct_diffuse = max(0, dot(-lighting.direct_direction.xyz, data.normal.xyz)) * lighting.direct_color.rgb;

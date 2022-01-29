@@ -22,10 +22,10 @@ layout(set = PER_FRAME_SET, binding = PER_FRAME_CAMERA) uniform Camera
 {
 	mat4 view;
 	vec4 max_distance_X_field_of_view_Y;
-
 	vec4 world_size;
-	vec4 debug_options;
+	
 	ivec4 draw_options; // x: DRAW_MODE_, y: DRAW_METHOD_
+	vec4 debug_options;
 } camera;
 
 layout(set = PER_FRAME_SET, binding = PER_FRAME_LIGHTING) uniform Lighting
@@ -53,6 +53,11 @@ float get_smoothness()
 float get_bounce_ray_length()
 {
 	return camera.debug_options.y;
+}
+
+float get_normal_offset()
+{
+	return camera.debug_options.z;
 }
 
 vec3 get_world_size()

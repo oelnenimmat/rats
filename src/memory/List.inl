@@ -22,10 +22,10 @@ struct List
 
 	void operator = (List && old)
 	{
-		MY_ENGINE_ASSERT(_memory == nullptr);
-		MY_ENGINE_ASSERT(_capacity == 0);
-		MY_ENGINE_ASSERT(_count == 0);
-		MY_ENGINE_ASSERT(_allocator == nullptr);
+		MINIMA_ASSERT(_memory == nullptr);
+		MINIMA_ASSERT(_capacity == 0);
+		MINIMA_ASSERT(_count == 0);
+		MINIMA_ASSERT(_allocator == nullptr);
 
 		_memory 	= old._memory;
 		_capacity 	= old._capacity;
@@ -48,26 +48,26 @@ struct List
 
 	T & operator[](size_t index)
 	{ 
-		MY_ENGINE_ASSERT(index < _count);
+		MINIMA_ASSERT(index < _count);
 		return _memory[index];
 	}
 
 	T const & operator[](size_t index) const
 	{ 
-		MY_ENGINE_ASSERT(index < _count);
+		MINIMA_ASSERT(index < _count);
 		return _memory[index];
 	}
 
 	void add(T item)
 	{
-		MY_ENGINE_ASSERT(_count < _capacity);
+		MINIMA_ASSERT(_count < _capacity);
 		_memory[_count] = item;
 		_count += 1;
 	}
 
 	T & add_new()
 	{
-		MY_ENGINE_ASSERT(_count < _capacity);
+		MINIMA_ASSERT(_count < _capacity);
 		size_t index = _count;
 		_count += 1;
 		return _memory[index];

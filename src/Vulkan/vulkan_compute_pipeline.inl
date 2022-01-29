@@ -64,7 +64,7 @@ namespace
 			case GraphicsBufferType::uniform: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		};
 
-		MY_ENGINE_ASSERT(false);
+		MINIMA_ASSERT(false);
 	}
 
 	VkBufferUsageFlagBits buffer_usage_from(GraphicsBufferType type)
@@ -75,7 +75,7 @@ namespace
 			case GraphicsBufferType::uniform: return VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 		};
 
-		MY_ENGINE_ASSERT(false);	
+		MINIMA_ASSERT(false);	
 	}
 
 

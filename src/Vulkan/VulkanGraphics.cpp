@@ -550,7 +550,7 @@ int graphics_create_buffer(Graphics * context, size_t size, GraphicsBufferType b
 
 	ComputeBuffer & buffer = context->per_frame_buffer_pool[buffer_handle];
 
-	MY_ENGINE_ASSERT(buffer.created == false);
+	MINIMA_ASSERT(buffer.created == false);
 	buffer.create(context, size, buffer_type);
 
 	return buffer_handle;
@@ -558,7 +558,7 @@ int graphics_create_buffer(Graphics * context, size_t size, GraphicsBufferType b
 
 void graphics_destroy_buffer(Graphics * context, int buffer_handle)
 {
-	MY_ENGINE_ASSERT(context->per_frame_buffer_pool.is_in_use(buffer_handle));
+	MINIMA_ASSERT(context->per_frame_buffer_pool.is_in_use(buffer_handle));
 
 	// todo:performance
 	vkDeviceWaitIdle(context->device);
@@ -590,9 +590,9 @@ bool graphics_bind_buffer(Graphics * context, int buffer_handle, int index_in_sh
 
 void graphics_write_buffer(Graphics * context, int buffer_handle, size_t size, void * data)
 {
-	MY_ENGINE_ASSERT(context->per_frame_buffer_pool.is_in_use(buffer_handle));
-	MY_ENGINE_ASSERT(context->per_frame_buffer_pool[buffer_handle].size >= size);
-	MY_ENGINE_ASSERT(data != nullptr);
+	MINIMA_ASSERT(context->per_frame_buffer_pool.is_in_use(buffer_handle));
+	MINIMA_ASSERT(context->per_frame_buffer_pool[buffer_handle].size >= size);
+	MINIMA_ASSERT(data != nullptr);
 
 	void * dst = context->per_frame_buffer_pool[buffer_handle].mapped_memories[context->current_frame_index];
 	memcpy(dst, data, size);

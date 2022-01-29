@@ -2,7 +2,7 @@
 
 clang++ ^
 src/*.cpp prebuild.o ^
--o game.exe ^
+-o rats.exe ^
 -g -gcodeview ^
 -std=c++17 ^
 -fopenmp ^

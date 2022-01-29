@@ -1,7 +1,7 @@
 @echo off
 
 clang++ ^
-src/prebuild/*.cpp ^
+src/prebuild/prebuild.cpp ^
 -c ^
 -o prebuild.o ^
 -g -gcodeview ^

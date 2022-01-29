@@ -20,16 +20,16 @@ enum
 	RANGE_EDIT_MIN_AND_WIDTH = 1
 };
 
-void to_json(nlohmann::json & json, Range const & range)
+inline SERIALIZE_STRUCT(Range const & range)
 {
-	json["min"] = range.min;
-	json["max"] = range.max;
+	serializer.write("min", range.min);
+	serializer.write("max", range.max);	
 }
 
-void from_json(nlohmann::json const & json, Range & range)
+inline DESERIALIZE_STRUCT(Range & range)
 {
-	get_if_value_exists(json, "min", range.min);
-	get_if_value_exists(json, "max", range.max);
+	serializer.read("min", range.min);
+	serializer.read("max", range.max);	
 }
 
 namespace ImGui

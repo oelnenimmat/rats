@@ -10,18 +10,19 @@ struct WorldSettings
 	Gradient colors;
 };
 
-inline void to_json(nlohmann::json & json, WorldSettings const & world_settings)
+
+inline SERIALIZE_STRUCT(WorldSettings const & world_settings)
 {
-	SERIALIZE(world_settings, world_size);
-	SERIALIZE(world_settings, octree_depth);
-	SERIALIZE(world_settings, colors);
+	serializer.write("world_size", world_settings.world_size);
+	serializer.write("octree_depth", world_settings.octree_depth);
+	serializer.write("colors", world_settings.colors);
 }
 
-inline void from_json(nlohmann::json const & json, WorldSettings & world_settings)
+inline DESERIALIZE_STRUCT(WorldSettings & world_settings)
 {
-	DESERIALIZE(world_settings, world_size);
-	DESERIALIZE(world_settings, octree_depth);
-	DESERIALIZE(world_settings, colors);
+	serializer.read("world_size", world_settings.world_size);
+	serializer.read("octree_depth", world_settings.octree_depth);
+	serializer.read("colors", world_settings.colors);
 }
 
 namespace gui

@@ -2,7 +2,7 @@
 
 void JobQueue::execute() 
 {	
-	MY_ENGINE_ASSERT(executing == false);
+	MINIMA_ASSERT(executing == false);
 
 	executing = true;
 	// Todo(Leo): too much nesting, is ugly
@@ -40,7 +40,7 @@ void JobQueue::wait()
 
 void JobQueue::reset()
 {
-	MY_ENGINE_ASSERT(executing == false);
+	MINIMA_ASSERT(executing == false);
 	
 	jobs.reset();
 	personal_allocator.reset();

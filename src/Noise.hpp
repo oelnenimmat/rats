@@ -10,6 +10,7 @@ Todo:
 
 #include "math.hpp"
 #include "meta_info.hpp"
+#include "SmallXXHash.hpp"
 
 struct Noise2D
 {
@@ -90,18 +91,18 @@ struct NoiseSettings
 	float amplitude = 2;
 };
 
-inline void to_json(nlohmann::json & json, NoiseSettings const & noise_settings)
+inline SERIALIZE_STRUCT(NoiseSettings const & noise_settings)
 {
-	SERIALIZE(noise_settings, seed);
-	SERIALIZE(noise_settings, frequency);
-	SERIALIZE(noise_settings, amplitude);
+	serializer.write("seed", noise_settings.seed);
+	serializer.write("frequency", noise_settings.frequency);
+	serializer.write("amplitude", noise_settings.amplitude);
 }
 
-inline void from_json(nlohmann::json const & json, NoiseSettings & noise_settings)
+inline DESERIALIZE_STRUCT(NoiseSettings & noise_settings)
 {
-	DESERIALIZE(noise_settings, seed);
-	DESERIALIZE(noise_settings, frequency);
-	DESERIALIZE(noise_settings, amplitude);
+	serializer.read("seed", noise_settings.seed);
+	serializer.read("frequency", noise_settings.frequency);
+	serializer.read("amplitude", noise_settings.amplitude);
 }
 
 namespace gui

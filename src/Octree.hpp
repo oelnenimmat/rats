@@ -5,6 +5,8 @@
 #include "Gradient.hpp"
 #include "WorldSettings.hpp"
 
+#include "loop.hpp"
+
 struct OctreeNode
 {
 	float4 color;
@@ -253,4 +255,54 @@ void do_octree_test(
 	std::cout << "[OCTREE]: test done\n";
 
 	// return octree;
+}
+
+void draw_cuboid(float3 position_WS, Octree & voxels, int depth, float size, float3 color, float3 world_size)
+{	
+	// +1 is debug thing, i hate it
+	float3 world_to_voxel = float3(int3(1 << (depth + 1), 1 << (depth + 1), 1 << (depth + 1))) / world_size;
+
+	// thing is currently a cuboid
+	float3 size_WS 		= float3(size, 2 * size, size);
+	int3 size_VS 		= int3(size_WS * world_to_voxel);
+
+	float3 offset_OS 	= float3(-size_WS.x / 2, 0, -size_WS.z / 2);
+	float3 start_WS 	= position_WS + offset_OS;
+	int3 start_VS 		= int3(floor(start_WS * world_to_voxel));
+
+	for_xyz(size_VS, [&](int x, int y, int z)
+	{
+		// float3 position_OS = float3(
+		// 	x / world_to_voxel.x + offset_OS.x,
+		// 	y / world_to_voxel.y + size,
+		// 	z / world_to_voxel.z + offset_OS.z
+		// );
+
+		float3 position_OS = float3(x,y,z) - offset_OS;
+
+		// WS and OS are same size, they are just located different places
+		// if (length(position_OS.xz) < size / 2)
+		{
+			bool is_first = (x == 0 && y == 0 && z == 0);
+
+			x += start_VS.x;
+			y += start_VS.y;
+			z += start_VS.z;
+
+			OctreeNode & node = voxels.get_or_add_and_get_node(x,y,z,depth);
+			node.material() = 1;
+
+			float3 normal = position_OS;
+			// normal.y *= 0.5;
+			normal = normalize(normal);
+			node.normal() = float3(0,0,0);//normal;
+			node.color = float4(color, 1);
+			
+		}
+	});
+}
+
+void draw_mouse(float3 position, Octree & voxels, int depth, float3 color, float3 world_size)
+{
+	draw_cuboid(position, voxels, depth, 0.125, color, world_size);
 }

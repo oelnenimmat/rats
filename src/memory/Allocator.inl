@@ -10,7 +10,7 @@ struct Allocator
     T * allocate(int count)
     {
         // MY_ENGINE_EXECUTE_IN_DEBUG_ONLY(_allocation_count += 1)
-        MY_ENGINE_ASSERT(count > 0);
+        MINIMA_ASSERT(count > 0);
 
         size_t size = sizeof(T) * count;
         T * result = reinterpret_cast<T*>(typeless_allocate(size, alignof(T)));
@@ -41,7 +41,7 @@ struct Allocator
     
 //     ~Allocator()
 //     {
-//         MY_ENGINE_ASSERT(_allocation_count == 0);
+//         MINIMA_ASSERT(_allocation_count == 0);
 //     }
 // private:
 //     int _allocation_count;

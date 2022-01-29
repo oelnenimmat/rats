@@ -5,7 +5,7 @@
 	#include <iostream>
 	void win32_emergency_shutdown();
 
-	void my_engine_assert(bool condition, char const * expression, char const * file, int line)
+	void minima_assert(bool condition, char const * expression, char const * file, int line)
 	{
 		if (condition == false)
 		{

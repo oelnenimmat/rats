@@ -9,7 +9,7 @@ struct ArenaAllocator : Allocator
 		_used(0),
 		_memory(reinterpret_cast<u8*>(memory))
 	{
-		MY_ENGINE_ASSERT(_memory != nullptr);
+		MINIMA_ASSERT(_memory != nullptr);
 	}
 
 
@@ -18,7 +18,7 @@ struct ArenaAllocator : Allocator
 		size_t start = ((_used / alignment) + 1) * alignment;
 
 		_used = start + size;
-		MY_ENGINE_ASSERT(_used < _capacity);
+		MINIMA_ASSERT(_used < _capacity);
 
 		return _memory + start;
 	}

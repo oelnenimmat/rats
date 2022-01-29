@@ -8,16 +8,16 @@ struct DebugTerrainSettings
 	float height;
 };
 
-inline void to_json(nlohmann::json & json, DebugTerrainSettings const & s)
+inline SERIALIZE_STRUCT(DebugTerrainSettings const & s)
 {
-	json["noise_settings"] = s.noise_settings;
-	json["height"] = s.height;
+	serializer.write("noise_settings", s.noise_settings);
+	serializer.write("height", s.height);
 }
 
-inline void from_json(nlohmann::json const & json, DebugTerrainSettings & s)
+inline DESERIALIZE_STRUCT(DebugTerrainSettings & s)
 {
-	get_if_value_exists(json, "noise_settings", s.noise_settings);
-	get_if_value_exists(json, "height", s.height);
+	serializer.read("noise_settings", s.noise_settings);
+	serializer.read("height", s.height);
 }
 
 namespace gui

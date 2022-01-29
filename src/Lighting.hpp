@@ -32,18 +32,18 @@ struct LightSettings
 	}
 };
 
-inline void to_json(nlohmann::json & json, LightSettings const & light_settings)
+inline SERIALIZE_STRUCT(LightSettings const & light_settings)
 {
-	SERIALIZE(light_settings, sun_angle);
-	SERIALIZE(light_settings, sun_color);
-	SERIALIZE(light_settings, ambient_color);
+	serializer.write("sun_angle", light_settings.sun_angle);
+	serializer.write("sun_color", light_settings.sun_color);
+	serializer.write("ambient_color", light_settings.ambient_color);
 }
 
-inline void from_json(nlohmann::json const & json, LightSettings & light_settings)
+inline DESERIALIZE_STRUCT(LightSettings & light_settings)
 {
-	DESERIALIZE(light_settings, sun_angle);
-	DESERIALIZE(light_settings, sun_color);
-	DESERIALIZE(light_settings, ambient_color);
+	serializer.read("sun_angle", light_settings.sun_angle);
+	serializer.read("sun_color", light_settings.sun_color);
+	serializer.read("ambient_color", light_settings.ambient_color);
 }
 
 namespace gui

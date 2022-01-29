@@ -10,7 +10,8 @@
 
 #include "memory.hpp"
 
-#include "engine.hpp"
+// this was alone in its header, so it was taken here
+void run_engine(Window*, Graphics *, Input*);
 
 int main()
 {

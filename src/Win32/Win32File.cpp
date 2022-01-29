@@ -6,7 +6,7 @@
 #if defined MY_ENGINE_DEBUG
 File::~File()
 {
-	MY_ENGINE_ASSERT(file_is_open(this) == false);
+	MINIMA_ASSERT(file_is_open(this) == false);
 }
 #endif
 

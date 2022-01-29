@@ -34,30 +34,27 @@ struct Gradient
 	inline int 		sort_up(int index);
 };
 
-void to_json(nlohmann::json & json, Gradient const & gradient)
+
+inline SERIALIZE_STRUCT(Gradient::Point const & point)
 {
-	nlohmann::json value;
-	for (int i = 0; i < gradient.point_count; i++)
-	{
-		value[i]["color"] = gradient.points[i].color;
-		value[i]["position"] = gradient.points[i].position;
-	}
-	json = value;
+	serializer.write("color", point.color);
+	serializer.write("position", point.position);
 }
 
-void from_json(nlohmann::json const & json, Gradient & gradient)
+inline DESERIALIZE_STRUCT(Gradient::Point & point)
 {
-	Gradient value;
-	if (json.is_array())
-	{
-		value.point_count = rats::min(Gradient::max_points, json.size());
-		for (int i = 0; i < value.point_count; i++)
-		{
-			value.points[i].color = json.at(i)["color"].get<float4>();
-			value.points[i].position = json.at(i)["position"].get<float>();
-		}
-	}
-	gradient = value;
+	serializer.read("color", point.color);
+	serializer.read("position", point.position);
+}
+
+inline SERIALIZE_STRUCT(Gradient const & gradient)
+{
+	serializer.write_array("points", gradient.point_count, gradient.points);
+}
+
+inline DESERIALIZE_STRUCT(Gradient & gradient)
+{
+	serializer.read_array("points", gradient.point_count, gradient.points);
 }
 
 int Gradient::add_point(float position, ImColor const & color)

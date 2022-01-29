@@ -5,6 +5,7 @@
 #include "meta_info.hpp"
 #include "math.hpp"
 #include "Noise.hpp"
+#include "random.hpp"
 
 #include "gui.hpp"
 #include "meta_info.hpp"
@@ -26,34 +27,34 @@ struct GrassSettings
 	float2  		world_max;
 };
 
-inline void to_json(nlohmann::json & json, GrassSettings const & s)
+inline SERIALIZE_STRUCT(GrassSettings const & grass_settings)
 {
-	SERIALIZE(s, direction);
-	SERIALIZE(s, length);
-	SERIALIZE(s, depth);
-	SERIALIZE(s, color);
-	SERIALIZE(s, count);
-	SERIALIZE(s, wind_noise_settings);
-	SERIALIZE(s, wind_noise_move_speed);
-	SERIALIZE(s, wind_strength);
-	SERIALIZE(s, colors);
-	SERIALIZE(s, world_min);
-	SERIALIZE(s, world_max);
+	serializer.write("direction", grass_settings.direction);
+	serializer.write("length", grass_settings.length);
+	serializer.write("depth", grass_settings.depth);
+	serializer.write("color", grass_settings.color);
+	serializer.write("count", grass_settings.count);
+	serializer.write("wind_noise_settings", grass_settings.wind_noise_settings);
+	serializer.write("wind_noise_move_speed", grass_settings.wind_noise_move_speed);
+	serializer.write("wind_strength", grass_settings.wind_strength);
+	serializer.write("colors", grass_settings.colors);
+	serializer.write("world_min", grass_settings.world_min);
+	serializer.write("world_max", grass_settings.world_max);
 }
 
-inline void from_json(nlohmann::json const & json, GrassSettings & s)
+inline DESERIALIZE_STRUCT(GrassSettings & grass_settings)
 {
-	DESERIALIZE(s, direction);
-	DESERIALIZE(s, length);
-	DESERIALIZE(s, depth);
-	DESERIALIZE(s, color);
-	DESERIALIZE(s, count);
-	DESERIALIZE(s, wind_noise_settings);
-	DESERIALIZE(s, wind_noise_move_speed);
-	DESERIALIZE(s, wind_strength);
-	DESERIALIZE(s, colors);
-	DESERIALIZE(s, world_min);
-	DESERIALIZE(s, world_max);
+	serializer.read("direction", grass_settings.direction);
+	serializer.read("length", grass_settings.length);
+	serializer.read("depth", grass_settings.depth);
+	serializer.read("color", grass_settings.color);
+	serializer.read("count", grass_settings.count);
+	serializer.read("wind_noise_settings", grass_settings.wind_noise_settings);
+	serializer.read("wind_noise_move_speed", grass_settings.wind_noise_move_speed);
+	serializer.read("wind_strength", grass_settings.wind_strength);
+	serializer.read("colors", grass_settings.colors);
+	serializer.read("world_min", grass_settings.world_min);
+	serializer.read("world_max", grass_settings.world_max);
 }
 
 namespace gui

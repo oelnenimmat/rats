@@ -29,8 +29,6 @@
 	#include <imgui/imgui_impl_vulkan.cpp>
 #endif
 
-
-
 #include <iostream>
 
 void init_imgui(Window * window, Graphics * graphics)

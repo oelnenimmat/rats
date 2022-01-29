@@ -1,6 +1,8 @@
 {
     "draw_options": {
-        "draw_mode": 1
+        "draw_method": 0,
+        "draw_mode": 0
     },
-    "value": 48
+    "super_strong": false,
+    "value": 40
 }

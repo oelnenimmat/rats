@@ -16,7 +16,7 @@ struct Pool
 
 	int next_free()
 	{
-		MY_ENGINE_ASSERT(first_free < elements.length());
+		MINIMA_ASSERT(first_free < elements.length());
 		int index = first_free;
 
 		first_free = elements[first_free].next_free;
@@ -53,7 +53,7 @@ struct Pool
 
 	bool is_in_use(int index)
 	{
-		MY_ENGINE_ASSERT(index >= 0 && index < elements.length());
+		MINIMA_ASSERT(index >= 0 && index < elements.length());
 		return elements[index].next_free == in_use;
 	}
 

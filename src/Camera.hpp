@@ -4,6 +4,10 @@
 #include "gui.hpp"
 #include "Coordinates.hpp"
 #include "vectors.hpp"
+#include "math.hpp"
+
+#include "Input.hpp"
+#include "InputSettings.hpp"
 
 struct EditorCamera
 {
@@ -15,7 +19,6 @@ struct EditorCamera
 
 	bool enabled = false;
 
-	// alignas (16) float view_matrix [16];
 	float4x4 view_matrix;
 
 	float3 right() const;
@@ -23,22 +26,22 @@ struct EditorCamera
 	float3 forward() const;
 };
 
-inline void to_json(nlohmann::json & json, EditorCamera const & c)
+inline SERIALIZE_STRUCT(EditorCamera const & camera)
 {
-	json["pan"] = c.pan;
-	json["tilt"] = c.tilt;
-	json["position"] = c.position;
-	json["move_speed"] = c.move_speed;
-	json["enabled"] = c.enabled;
+	serializer.write("pan", camera.pan);
+	serializer.write("tilt", camera.tilt);
+	serializer.write("position", camera.position);
+	serializer.write("move_speed", camera.move_speed);
+	serializer.write("enabled", camera.enabled);
 }
 
-inline void from_json(nlohmann::json const & json, EditorCamera & c)
+inline DESERIALIZE_STRUCT(EditorCamera & camera)
 {
-	get_if_value_exists(json, "pan", c.pan);
-	get_if_value_exists(json, "tilt", c.tilt);
-	get_if_value_exists(json, "position", c.position);
-	get_if_value_exists(json, "move_speed", c.move_speed);
-	get_if_value_exists(json, "enabled", c.enabled);
+	serializer.read("pan", camera.pan);
+	serializer.read("tilt", camera.tilt);
+	serializer.read("position", camera.position);
+	serializer.read("move_speed", camera.move_speed);
+	serializer.read("enabled", camera.enabled);
 }
 
 namespace gui
@@ -54,8 +57,6 @@ namespace gui
 		return gui.dirty;
 	}
 }
-
-// MY_ENGINE_META_DEFAULT_EDIT(EditorCamera)
 
 struct CameraInput
 {
@@ -90,7 +91,7 @@ void update_camera(EditorCamera & camera, CameraInput const & input)
 		camera.tilt += input.look.y;
 	}
 
-	float camera_angle_radians = camera.pan / 180.0f * pi;
+	float camera_angle_radians = rats::to_radians(camera.pan);
 	float s = sin(camera_angle_radians);
 	float c = cos(camera_angle_radians);
 
@@ -102,7 +103,7 @@ void update_camera(EditorCamera & camera, CameraInput const & input)
 		0, 0, 0, 1
 	};
 
-	float tilt_angle_radians = camera.tilt / 180.0f * pi;
+	float tilt_angle_radians = rats::to_radians(camera.tilt);
 	float ts = sin(tilt_angle_radians);
 	float tc = cos(tilt_angle_radians);
 
@@ -135,7 +136,6 @@ void update_camera(EditorCamera & camera, CameraInput const & input)
 		camera.position += movement;
 	}
 	camera.view_matrix.column(3) = float4(camera.position, 1);
-	// get_column(camera.view_matrix.values, 3) = float4(camera.position, 1);
 }
 
 float3 EditorCamera::right() const

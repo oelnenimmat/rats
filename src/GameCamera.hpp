@@ -4,6 +4,10 @@
 #include "gui.hpp"
 #include "Coordinates.hpp"
 #include "vectors.hpp"
+#include "math.hpp"
+
+#include "Input.hpp"
+#include "InputSettings.hpp"
 
 struct GameCamera
 {
@@ -27,28 +31,28 @@ struct GameCamera
 	float3 forward() const;
 };
 
-inline void to_json(nlohmann::json & json, GameCamera const & c)
+inline SERIALIZE_STRUCT(GameCamera const & camera)
 {
-	json["pan"] = c.pan;
-	json["tilt"] = c.tilt;
-	json["position"] = c.position;
-	json["distance"] = c.distance;
-	json["move_speed"] = c.move_speed;
-	json["enabled"] = c.enabled;
-	json["max_distance"] = c.max_distance;
-	json["field_of_view"] = c.field_of_view;
+	serializer.write("pan", camera.pan);
+	serializer.write("tilt", camera.tilt);
+	serializer.write("position", camera.position);
+	serializer.write("distance", camera.distance);
+	serializer.write("move_speed", camera.move_speed);
+	serializer.write("enabled", camera.enabled);
+	serializer.write("max_distance", camera.max_distance);
+	serializer.write("field_of_view", camera.field_of_view);
 }
 
-inline void from_json(nlohmann::json const & json, GameCamera & c)
+inline DESERIALIZE_STRUCT(GameCamera & camera)
 {
-	get_if_value_exists(json, "pan", c.pan);
-	get_if_value_exists(json, "tilt", c.tilt);
-	get_if_value_exists(json, "position", c.position);
-	get_if_value_exists(json, "distance", c.distance);
-	get_if_value_exists(json, "move_speed", c.move_speed);
-	get_if_value_exists(json, "enabled", c.enabled);
-	get_if_value_exists(json, "max_distance", c.max_distance);
-	get_if_value_exists(json, "field_of_view", c.field_of_view);
+	serializer.read("pan", camera.pan);
+	serializer.read("tilt", camera.tilt);
+	serializer.read("position", camera.position);
+	serializer.read("distance", camera.distance);
+	serializer.read("move_speed", camera.move_speed);
+	serializer.read("enabled", camera.enabled);
+	serializer.read("max_distance", camera.max_distance);
+	serializer.read("field_of_view", camera.field_of_view);
 }
 
 namespace gui
@@ -75,7 +79,7 @@ void update_game_camera(GameCamera & camera, CameraInput const & input, float3 t
 		camera.tilt += input.look.y;
 	}
 
-	float camera_angle_radians = camera.pan / 180.0f * pi;
+	float camera_angle_radians = rats::to_radians(camera.pan);
 	float s = sin(camera_angle_radians);
 	float c = cos(camera_angle_radians);
 
@@ -87,7 +91,7 @@ void update_game_camera(GameCamera & camera, CameraInput const & input, float3 t
 		0, 0, 0, 1
 	};
 
-	float tilt_angle_radians = camera.tilt / 180.0f * pi;
+	float tilt_angle_radians = rats::to_radians(camera.tilt);
 	float ts = sin(tilt_angle_radians);
 	float tc = cos(tilt_angle_radians);
 

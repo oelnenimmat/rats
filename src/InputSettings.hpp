@@ -8,20 +8,20 @@ struct InputSettings
 	float2 mouse_sensitivity;
 };
 
-inline void to_json(nlohmann::json & json, InputSettings const & input_settings)
+inline SERIALIZE_STRUCT(InputSettings const & input_settings)
 {
-	SERIALIZE(input_settings, mouse_sensitivity);
+	serializer.write("mouse_sensitivity", input_settings.mouse_sensitivity);
 }
 
-inline void from_json(nlohmann::json const & json, InputSettings & input_settings)
+inline DESERIALIZE_STRUCT(InputSettings & input_settings)
 {
-	DESERIALIZE(input_settings, mouse_sensitivity);
+	serializer.read("mouse_sensitivity", input_settings.mouse_sensitivity);
 }
 
 namespace gui
 {
 	inline bool edit(InputSettings & input_settings)
 	{
-		return edit(input_settings.mouse_sensitivity);
+		return edit("mouse_sensitivity", input_settings.mouse_sensitivity);
 	}
 }

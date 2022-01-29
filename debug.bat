@@ -1,2 +1,2 @@
 @echo off
-start remedybg.exe game.exe
+start remedybg.exe rats.exe

@@ -36,11 +36,16 @@ namespace gui
 			"octree",
 			"chunktree",
 		};
-		int * value = reinterpret_cast<int*>(m);
+		int * value = reinterpret_cast<int*>(&m);
 		return Combo(label, value, c_strings, (int)ComputeShaderDrawMethod::COUNT);
 	}
 }
 
+struct DrawOptionsGpuData
+{
+	int4 draw_options;
+	float4 debug_options;
+};
 
 // $minima: serialize
 // $minima: gui_edit
@@ -49,29 +54,30 @@ struct DrawOptions
 	ComputeShaderDrawMode draw_mode;
 	ComputeShaderDrawMethod draw_method;
 
-	int4 get_data_for_graphics() const
+	float4 debug_options;
+
+	DrawOptionsGpuData get_gpu_data() const
 	{
-		return int4((int)draw_mode, (int)draw_method, 0, 0);
+		return DrawOptionsGpuData
+		{
+			int4((int)draw_mode, (int)draw_method, 0, 0),
+			debug_options
+		};
 	}
 };
 
-inline void to_json(nlohmann::json & json, DrawOptions const & d)
+inline SERIALIZE_STRUCT(DrawOptions const & draw_options)
 {
-	// todo:ill-judged cast: casting as we are transitioning away from meta stuff
-	json["draw_mode"] = (int)d.draw_mode;
-	json["draw_method"] = (int)d.draw_method;
+	serializer.write("draw_mode", draw_options.draw_mode);
+	serializer.write("draw_method", draw_options.draw_method);
+	serializer.write("debug_options", draw_options.debug_options);
 }
 
-inline void from_json(nlohmann::json const & json, DrawOptions & d)
+inline DESERIALIZE_STRUCT(DrawOptions & draw_options)
 {
-	int draw_mode = 0;
-	int draw_method = 0;
-
-	get_if_value_exists(json, "draw_mode", draw_mode);
-	get_if_value_exists(json, "draw_method", draw_method);
-
-	d.draw_mode = (ComputeShaderDrawMode)draw_mode;
-	d.draw_method = (ComputeShaderDrawMethod)draw_method;
+	serializer.read("draw_mode", draw_options.draw_mode);
+	serializer.read("draw_method", draw_options.draw_method);
+	serializer.read("debug_options", draw_options.debug_options);
 }
 
 namespace gui
@@ -81,6 +87,7 @@ namespace gui
 		auto helper = gui_helper();
 		helper.edit("draw_mode", d.draw_mode);
 		helper.edit("draw_method", d.draw_method);
+		helper.edit("debug_options", d.debug_options);
 		return helper.dirty;
 	}
 }
@@ -95,18 +102,18 @@ struct VoxelSettings
 	int draw_octree_depth 		= 7;
 };
 
-inline void to_json(nlohmann::json & json, VoxelSettings const & v)
+inline SERIALIZE_STRUCT(VoxelSettings const & voxel_settings)
 {
-	json["character_octree_depth"] = v.character_octree_depth;
-	json["rat_octree_depth"] = v.rat_octree_depth;
-	json["draw_octree_depth"] = v.draw_octree_depth;
+	serializer.write("character_octree_depth", voxel_settings.character_octree_depth);
+	serializer.write("rat_octree_depth", voxel_settings.rat_octree_depth);
+	serializer.write("draw_octree_depth", voxel_settings.draw_octree_depth);
 }
 
-inline void from_json(nlohmann::json const & json, VoxelSettings & v)
+inline DESERIALIZE_STRUCT(VoxelSettings & voxel_settings)
 {
-	get_if_value_exists(json, "character_octree_depth", v.character_octree_depth);
-	get_if_value_exists(json, "rat_octree_depth", v.rat_octree_depth);
-	get_if_value_exists(json, "draw_octree_depth", v.draw_octree_depth);
+	serializer.read("character_octree_depth", voxel_settings.character_octree_depth);
+	serializer.read("rat_octree_depth", voxel_settings.rat_octree_depth);
+	serializer.read("draw_octree_depth", voxel_settings.draw_octree_depth);
 }
 
 namespace gui
