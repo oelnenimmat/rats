@@ -9,32 +9,11 @@
 #include "gui.hpp"
 #include "meta_info.hpp"
 #include "Gradient.hpp"
-
-struct Range
-{
-	float min;
-	float max;
-
-	float evaluate(float position)
-	{
-		return rats::lerp(min, max, position);
-	}
-};
-
-MY_ENGINE_META_INFO(Range)
-{
-	return members(
-		member("min", &Range::min),
-		member("max", &Range::max)
-	);
-}
-
-MY_ENGINE_META_DEFAULT_EDIT(Range)
+#include "Range.hpp"
 
 struct GrassSettings
 {
 	float3 			direction;
-	// float 			length;
 	Range 			length;
 	int 			depth;
 	float3 			color;
@@ -47,54 +26,94 @@ struct GrassSettings
 	float2  		world_max;
 };
 
-MY_ENGINE_META_INFO(GrassSettings)
+inline void to_json(nlohmann::json & json, GrassSettings const & s)
 {
-	return members(
-		member("direction", &GrassSettings::direction, META_MEMBER_FLAGS_NORMALIZED),
-		member("length", &GrassSettings::length),
-		member("color", &GrassSettings::color, META_MEMBER_FLAGS_COLOR),
-		member("depth", &GrassSettings::depth),
-		member("count", &GrassSettings::count),
-		member("wind_noise_settings", &GrassSettings::wind_noise_settings),
-		member("wind_noise_move_speed", &GrassSettings::wind_noise_move_speed),
-		member("wind_strength", &GrassSettings::wind_strength),
-		member("colors", &GrassSettings::colors),
-		member("world_min", &GrassSettings::world_min),
-		member("world_max", &GrassSettings::world_max)
-	);
+	SERIALIZE(s, direction);
+	SERIALIZE(s, length);
+	SERIALIZE(s, depth);
+	SERIALIZE(s, color);
+	SERIALIZE(s, count);
+	SERIALIZE(s, wind_noise_settings);
+	SERIALIZE(s, wind_noise_move_speed);
+	SERIALIZE(s, wind_strength);
+	SERIALIZE(s, colors);
+	SERIALIZE(s, world_min);
+	SERIALIZE(s, world_max);
 }
 
-MY_ENGINE_META_DEFAULT_EDIT(GrassSettings)
-
-void validate_edit(GrassSettings & settings)
+inline void from_json(nlohmann::json const & json, GrassSettings & s)
 {
-	settings.length.min = rats::max(0.1f, settings.length.min);
-	settings.length.max = rats::max(settings.length.min + 0.1f, settings.length.max);
+	DESERIALIZE(s, direction);
+	DESERIALIZE(s, length);
+	DESERIALIZE(s, depth);
+	DESERIALIZE(s, color);
+	DESERIALIZE(s, count);
+	DESERIALIZE(s, wind_noise_settings);
+	DESERIALIZE(s, wind_noise_move_speed);
+	DESERIALIZE(s, wind_strength);
+	DESERIALIZE(s, colors);
+	DESERIALIZE(s, world_min);
+	DESERIALIZE(s, world_max);
+}
 
-	if (length(settings.direction) < 0.01f)
+namespace gui
+{
+	inline bool edit(GrassSettings & s)
 	{
-		settings.direction = float3(0,1,0);
+		auto gui = gui_helper();
+		gui.edit("direction", s.direction);
+		gui.edit("length", s.length);
+		gui.edit("color", s.color);
+		gui.edit("depth", s.depth);
+		gui.edit("count", s.count);
+		gui.edit("wind_noise_settings", s.wind_noise_settings);
+		gui.edit("wind_noise_move_speed", s.wind_noise_move_speed);
+		gui.edit("wind_strength", s.wind_strength);
+		gui.edit("colors", s.colors);
+		gui.edit("world_min", s.world_min);
+		gui.edit("world_max", s.world_max);
+		return gui.dirty;
 	}
-	settings.direction = normalize(settings.direction);
-	settings.depth = rats::clamp(settings.depth, 1, 10);
+}
+
+namespace gui
+{
+	void validate_edit(GrassSettings & settings)
+	{
+		settings.length.min = rats::max(0.1f, settings.length.min);
+		settings.length.max = rats::max(settings.length.min + 0.1f, settings.length.max);
+
+		if (length(settings.direction) < 0.01f)
+		{
+			settings.direction = float3(0,1,0);
+		}
+		settings.direction = normalize(settings.direction);
+		settings.depth = rats::clamp(settings.depth, 1, 10);
+	}
 }
 
 struct GrassSystem
 {
 	GrassSettings * settings;
 	DEBUG_Allocator * allocator;
-	NoiseSettings const * noise_settings;
+	DebugTerrain const * terrain;
+	// NoiseSettings const * noise_settings;
 	float2 	wind_noise_offset;
 
 	bool created = false;
 	LowLevelArray<float3> roots = {};
 	LowLevelArray<float3> tips = {};
 
-	void initialize(GrassSettings & settings, DEBUG_Allocator & allocator, NoiseSettings const & noise_settings)
+	void init(
+		GrassSettings & settings,
+		DEBUG_Allocator & allocator,
+		DebugTerrain const & terrain
+		// NoiseSettings const & noise_settings
+	)
 	{
 		this->settings = &settings;
 		this->allocator = &allocator;
-		this->noise_settings = &noise_settings;
+		this->terrain = &terrain;
 	}
 
 	~GrassSystem()
@@ -158,13 +177,13 @@ void generate_grass(GrassSystem & grass)
 	grass.roots = LowLevelArray<float3>(grass.settings->count, *grass.allocator);
 	grass.tips = LowLevelArray<float3>(grass.settings->count, *grass.allocator);
 
-	Noise2D noise = make_noise(*grass.noise_settings);
+	// Noise2D noise = make_noise(*grass.noise_settings);
 
 	for(int i = 0; i < grass.roots.length(); i++)
 	{
 		float3 position;
 		position.xz = random_float2(grass.settings->world_min, grass.settings->world_max);
-		position.y = (noise.evaluate(position.xz) / 2 + 0.5) * grass.noise_settings->amplitude;
+		position.y = grass.terrain->get_height(position.xz);
 		grass.roots[i] = position;
 
 		// float length = random_float(0.9, 1.1) * grass.settings->length;
@@ -180,7 +199,7 @@ namespace gui
 	{
 		auto helper = gui_helper();
 
-		helper.edit(edit(*grass.settings));
+		helper.edit(edit("Settings", *grass.settings));
 		// Value("wind_noise_offset", grass.wind_noise_offset);
 		DragFloat2("wind_noise_offset", &grass.wind_noise_offset);
 		if (Button("Generate"))
@@ -191,20 +210,24 @@ namespace gui
 		return helper.dirty;
 	}
 
-	bool edit(char const * label, GrassSystem & grass)
-	{
-		return edit(grass);	
-	}
+	// bool edit(char const * label, GrassSystem & grass)
+	// {
+	// 	return edit(grass);	
+	// }
 }
 
-void draw_grass(GrassSystem const & grass, Octree & octree)
+void draw_grass(GrassSystem const & grass, Octree & octree, float3 world_size)
 {
 	if (grass.roots.empty())
 	{
 		return;
 	}
 
-	float3 world_to_voxel = float3(int3(1 << (grass.settings->depth + 1), 1 << (grass.settings->depth + 1), 1 << (grass.settings->depth + 1))) / float3(10, 10, 10);
+	float3 world_to_voxel = float3(int3(
+		1 << (grass.settings->depth),
+		1 << (grass.settings->depth),
+		1 << (grass.settings->depth)
+	)) / float3(10,10,10);
 
 	for (int i = 0; i < grass.roots.length(); i++)
 	{
@@ -239,6 +262,16 @@ void draw_grass(GrassSystem const & grass, Octree & octree)
 			int x = floor(tx);
 			int z = floor(tz);
 
+/*
+			int depth = y < steps / 2 ? grass.settings->depth - 1 : grass.settings->depth;
+			int _x = y < steps / 2 ? (x + start_VS.x) / 2 : x;
+			int _y = y < steps / 2 ? (y + start_VS.y) / 2 : y;
+			int _z = y < steps / 2 ? (z + start_VS.z) / 2 : z;
+
+			auto & node = octree.get_or_add_and_get_node(_x, _y, _z, depth);
+			node.material() = 2;
+			node.color = color;
+*/
 			if (y < (steps / 2))
 			{
 				int depth = grass.settings->depth - 1;

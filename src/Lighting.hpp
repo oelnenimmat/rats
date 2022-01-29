@@ -32,13 +32,28 @@ struct LightSettings
 	}
 };
 
-MY_ENGINE_META_INFO(LightSettings)
+inline void to_json(nlohmann::json & json, LightSettings const & light_settings)
 {
-	return members(
-		member("sun_angle", &LightSettings::sun_angle),
-		member("sun_color", &LightSettings::sun_color, META_MEMBER_FLAGS_COLOR_HDR),
-		member("ambient_color", &LightSettings::ambient_color, META_MEMBER_FLAGS_COLOR)
-	);	
+	SERIALIZE(light_settings, sun_angle);
+	SERIALIZE(light_settings, sun_color);
+	SERIALIZE(light_settings, ambient_color);
 }
 
-MY_ENGINE_META_DEFAULT_EDIT(LightSettings)
+inline void from_json(nlohmann::json const & json, LightSettings & light_settings)
+{
+	DESERIALIZE(light_settings, sun_angle);
+	DESERIALIZE(light_settings, sun_color);
+	DESERIALIZE(light_settings, ambient_color);
+}
+
+namespace gui
+{
+	inline bool edit(LightSettings & light_settings)
+	{
+		auto gui = gui_helper();
+		gui.edit("sun_angle", light_settings.sun_angle);
+		gui.edit("sun_color", light_settings.sun_color, META_MEMBER_FLAGS_COLOR_HDR);
+		gui.edit("ambient_color", light_settings.ambient_color, META_MEMBER_FLAGS_COLOR_HDR);
+		return gui.dirty;
+	}
+}

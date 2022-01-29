@@ -8,11 +8,20 @@ struct InputSettings
 	float2 mouse_sensitivity;
 };
 
-MY_ENGINE_META_INFO(InputSettings)
+inline void to_json(nlohmann::json & json, InputSettings const & input_settings)
 {
-	return members(
-		member("mouse_sensitivity", &InputSettings::mouse_sensitivity)
-	);
+	SERIALIZE(input_settings, mouse_sensitivity);
 }
 
-MY_ENGINE_META_DEFAULT_EDIT(InputSettings)
+inline void from_json(nlohmann::json const & json, InputSettings & input_settings)
+{
+	DESERIALIZE(input_settings, mouse_sensitivity);
+}
+
+namespace gui
+{
+	inline bool edit(InputSettings & input_settings)
+	{
+		return edit(input_settings.mouse_sensitivity);
+	}
+}

@@ -23,19 +23,39 @@ struct EditorCamera
 	float3 forward() const;
 };
 
-MY_ENGINE_META_INFO(EditorCamera)
+inline void to_json(nlohmann::json & json, EditorCamera const & c)
 {
-	return members
-	(
-		member("pan", &EditorCamera::pan),
-		member("tilt", &EditorCamera::tilt),
-		member("position", &EditorCamera::position),
-		member("move_speed", &EditorCamera::move_speed),
-		member("enabled", &EditorCamera::enabled)
-	);
+	json["pan"] = c.pan;
+	json["tilt"] = c.tilt;
+	json["position"] = c.position;
+	json["move_speed"] = c.move_speed;
+	json["enabled"] = c.enabled;
 }
 
-MY_ENGINE_META_DEFAULT_EDIT(EditorCamera)
+inline void from_json(nlohmann::json const & json, EditorCamera & c)
+{
+	get_if_value_exists(json, "pan", c.pan);
+	get_if_value_exists(json, "tilt", c.tilt);
+	get_if_value_exists(json, "position", c.position);
+	get_if_value_exists(json, "move_speed", c.move_speed);
+	get_if_value_exists(json, "enabled", c.enabled);
+}
+
+namespace gui
+{
+	inline bool edit(EditorCamera & c)//, Gui gui)
+	{
+		auto gui = gui_helper();
+		gui.edit("pan", c.pan);
+		gui.edit("tilt", c.tilt);
+		gui.edit("position", c.position);
+		gui.edit("move_speed", c.move_speed);
+		gui.edit("enabled", c.enabled);
+		return gui.dirty;
+	}
+}
+
+// MY_ENGINE_META_DEFAULT_EDIT(EditorCamera)
 
 struct CameraInput
 {

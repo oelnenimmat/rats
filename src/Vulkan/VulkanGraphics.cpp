@@ -59,7 +59,6 @@ struct VirtualFrame
 
 	VkDescriptorSet per_frame_descriptor_set;
 
-
 	struct {
 		VkFramebuffer framebuffer;
 	} imgui;
@@ -102,10 +101,11 @@ struct Graphics
 	VkPipelineLayout 	graphics_pipeline_layout;
 	VkPipeline 			graphics_pipeline;
 
-	VkPipeline  			compute_pipeline;
-	VkPipelineLayout  		compute_pipeline_layout;
+	bool 				compute_pipeline_created = false;	
+	VkPipeline  		compute_pipeline;
+	VkPipelineLayout  	compute_pipeline_layout;
 	
-	VkDescriptorPool 		compute_descriptor_pool;
+	VkDescriptorPool 	compute_descriptor_pool;
 
 	VkDescriptorSetLayout compute_render_target_descriptor_set_layout; 
 	VkDescriptorSetLayout per_frame_descriptor_set_layout; 
@@ -121,7 +121,7 @@ struct Graphics
 
 	// -----------------------------------------------------
 	
-	Array<ComputeBuffer> per_frame_buffers;
+	Pool<ComputeBuffer> per_frame_buffer_pool;
 
 	// -----------------------------------------------------
 
@@ -264,6 +264,8 @@ Graphics * create_graphics(Window const * window, Allocator * allocator)
 	create_graphics_pipeline(context);
 	create_virtual_frames(context);
 
+	context->per_frame_buffer_pool = Pool<ComputeBuffer>(100, *context->persistent_allocator);
+
 	std::cout << "[VULKAN]: initialized\n";
 
 	return context;
@@ -273,10 +275,14 @@ void clear_graphics(Graphics * context)
 {
 	vkDeviceWaitIdle(context->device);
 
-	for (auto & buffer : context->per_frame_buffers)
+	context->per_frame_buffer_pool.for_each([](ComputeBuffer & buffer)
 	{
-		buffer.destroy();
-	}
+		if(buffer.created)
+		{
+			buffer.destroy();
+		}
+	});
+
 	destroy_compute_pipeline(context);
 
 	destroy_virtual_frames(context);
@@ -325,7 +331,7 @@ void graphics_begin_frame(Graphics * g)
 	begin_info.flags = 0;
 	begin_info.pInheritanceInfo = nullptr;
 
-	// Todo(Leo): I feel that there are better things to do here, as inif this fails, try to recover
+	// Todo(Leo): I feel that there are better things to do here, as in "if this fails, try to recover"
 	VULKAN_HANDLE_ERROR(vkBeginCommandBuffer(cmd, &begin_info));
 
 	// ---------------------------------------------------------------
@@ -533,27 +539,45 @@ bool graphics_create_compute_pipeline(Graphics * context, GraphicsPipelineLayout
 	return true;
 }
 
-bool graphics_create_user_buffer(Graphics * context, size_t size, GraphicsBufferType buffer_type, int buffer_index)
+int graphics_create_buffer(Graphics * context, size_t size, GraphicsBufferType buffer_type)
 {
-	ComputeBuffer & buffer = context->per_frame_buffers[buffer_index];
+	int buffer_handle = context->per_frame_buffer_pool.next_free();
 
-	// 1: Create Buffer -------------------------------------------------------
-
-	if (buffer.created)
+	if (buffer_handle < 0)
 	{
-		buffer.destroy();
+		return -1;
 	}
+
+	ComputeBuffer & buffer = context->per_frame_buffer_pool[buffer_handle];
+
+	MY_ENGINE_ASSERT(buffer.created == false);
 	buffer.create(context, size, buffer_type);
 
-	// 2: Write Descriptors ---------------------------------------------------
+	return buffer_handle;
+}
 
+void graphics_destroy_buffer(Graphics * context, int buffer_handle)
+{
+	MY_ENGINE_ASSERT(context->per_frame_buffer_pool.is_in_use(buffer_handle));
+
+	// todo:performance
+	vkDeviceWaitIdle(context->device);
+
+	context->per_frame_buffer_pool[buffer_handle].destroy();
+	context->per_frame_buffer_pool.free(buffer_handle);
+}
+
+bool graphics_bind_buffer(Graphics * context, int buffer_handle, int index_in_shader, GraphicsBufferType buffer_type)
+{
+	ComputeBuffer & buffer = context->per_frame_buffer_pool[buffer_handle];
+	
 	for (int i = 0; i < context->virtual_frame_count; i++)
 	{
 		VkDescriptorBufferInfo buffer_info { buffer.buffer, buffer.buffer_offsets[i], buffer.single_buffer_memory_size };
 
 		auto write = vk_write_descriptor_set(
 			context->virtual_frames[i].per_frame_descriptor_set,
-			buffer_index,
+			buffer_handle,
 			descriptor_type_from(buffer_type),
 			&buffer_info
 		);
@@ -564,11 +588,13 @@ bool graphics_create_user_buffer(Graphics * context, size_t size, GraphicsBuffer
 	return true;
 }
 
-void graphics_write_user_buffer(Graphics * context, int buffer_index, size_t size, void * data)
+void graphics_write_buffer(Graphics * context, int buffer_handle, size_t size, void * data)
 {
-	MY_ENGINE_ASSERT(buffer_index >= 0 && buffer_index < context->per_frame_buffers.length());
+	MY_ENGINE_ASSERT(context->per_frame_buffer_pool.is_in_use(buffer_handle));
+	MY_ENGINE_ASSERT(context->per_frame_buffer_pool[buffer_handle].size >= size);
+	MY_ENGINE_ASSERT(data != nullptr);
 
-	void * dst = context->per_frame_buffers[buffer_index].mapped_memories[context->current_frame_index];
+	void * dst = context->per_frame_buffer_pool[buffer_handle].mapped_memories[context->current_frame_index];
 	memcpy(dst, data, size);
 }
 
@@ -623,7 +649,7 @@ void ComputeBuffer::create(Graphics * context, size_t size, GraphicsBufferType t
 		mapped_memories[i] = reinterpret_cast<uint8_t*>(mapped_memory) + offset;
 	}
 
-	size = size;
+	this->size = size;
 	created = true;
 }
 

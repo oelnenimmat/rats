@@ -13,6 +13,9 @@ struct GameCamera
 
 	float distance = 10;
 
+	float max_distance = 50; // drawing
+	float field_of_view = 1.6; // totally arbitrary unit
+
 	float move_speed = 10;
 
 	bool enabled = false;
@@ -24,20 +27,45 @@ struct GameCamera
 	float3 forward() const;
 };
 
-MY_ENGINE_META_INFO(GameCamera)
+inline void to_json(nlohmann::json & json, GameCamera const & c)
 {
-	return members
-	(
-		member("pan", &GameCamera::pan),
-		member("tilt", &GameCamera::tilt),
-		member("position", &GameCamera::position),
-		member("distance", &GameCamera::distance),
-		member("move_speed", &GameCamera::move_speed),
-		member("enabled", &GameCamera::enabled)
-	);
+	json["pan"] = c.pan;
+	json["tilt"] = c.tilt;
+	json["position"] = c.position;
+	json["distance"] = c.distance;
+	json["move_speed"] = c.move_speed;
+	json["enabled"] = c.enabled;
+	json["max_distance"] = c.max_distance;
+	json["field_of_view"] = c.field_of_view;
 }
 
-MY_ENGINE_META_DEFAULT_EDIT(GameCamera)
+inline void from_json(nlohmann::json const & json, GameCamera & c)
+{
+	get_if_value_exists(json, "pan", c.pan);
+	get_if_value_exists(json, "tilt", c.tilt);
+	get_if_value_exists(json, "position", c.position);
+	get_if_value_exists(json, "distance", c.distance);
+	get_if_value_exists(json, "move_speed", c.move_speed);
+	get_if_value_exists(json, "enabled", c.enabled);
+	get_if_value_exists(json, "max_distance", c.max_distance);
+	get_if_value_exists(json, "field_of_view", c.field_of_view);
+}
+
+namespace gui
+{
+	inline bool edit(GameCamera & c)
+	{
+		auto gui = gui_helper();
+		gui.edit("pan", c.pan);
+		gui.edit("tilt", c.tilt);
+		gui.edit("position", c.position);
+		gui.edit("distance", c.distance);
+		gui.edit("move_speed", c.move_speed);
+		gui.edit("max_distance", c.max_distance);
+		gui.edit("field_of_view", c.field_of_view);
+		return gui.dirty;
+	}
+}
 
 void update_game_camera(GameCamera & camera, CameraInput const & input, float3 target_position)
 {

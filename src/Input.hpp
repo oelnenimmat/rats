@@ -54,6 +54,12 @@ enum struct InputKey
 	keyboard_y,
 	keyboard_z,
 
+	keyboard_left_control,
+	keyboard_right_control,
+
+	// This is special, only returns true on input_key_is_down
+	// keyboard_any_control,
+
 	mouse_0,
 	mouse_1,
 	mouse_2,

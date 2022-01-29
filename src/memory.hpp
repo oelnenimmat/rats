@@ -24,6 +24,7 @@ enum struct AllocationType
 // #include "memory/Slice.inl"
 #include "memory/Array.inl"
 #include "memory/List.inl"
+#include "memory/Pool.inl"
 
 #include "memory/LowLevelArray.hpp"
 

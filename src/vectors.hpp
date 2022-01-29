@@ -26,68 +26,183 @@ union int4;
 #include "vectors/float4x4.hpp"
 
 #include "meta_info.hpp"
+#include "Serializer.hpp"
 
+// ----------------------------------------------------------------------------
 
-MY_ENGINE_META_INFO(float2)
+inline void to_json(nlohmann::json & json, float2 const & v)
 {
-	return members(
-		member("x", &float2::x),
-		member("y", &float2::y)
-	);
+	json["x"] = v.x;
+	json["y"] = v.y;
 }
 
-MY_ENGINE_META_INFO(float3)
+inline void to_json(nlohmann::json & json, float3 const & v)
 {
-	return members(
-		member("x", &float3::x),
-		member("y", &float3::y),
-		member("z", &float3::z)
-	);
+	json["x"] = v.x;
+	json["y"] = v.y;
+	json["z"] = v.z;
 }
 
-MY_ENGINE_META_INFO(float4)
+inline void to_json(nlohmann::json & json, float4 const & v)
 {
-	return members(
-		member("x", &float4::x),
-		member("y", &float4::y),
-		member("z", &float4::z),
-		member("w", &float4::w)
-	);
+	json["x"] = v.x;
+	json["y"] = v.y;
+	json["z"] = v.z;
+	json["w"] = v.w;
 }
 
-MY_ENGINE_META_INFO(int2)
+inline void to_json(nlohmann::json & json, int2 const & v)
 {
-	return members(
-		member("x", &int2::x),
-		member("y", &int2::y)
-	);
+	json["x"] = v.x;
+	json["y"] = v.y;
 }
 
-MY_ENGINE_META_INFO(int3)
+inline void to_json(nlohmann::json & json, int3 const & v)
 {
-	return members(
-		member("x", &int3::x),
-		member("y", &int3::y),
-		member("z", &int3::z)
-	);
+	json["x"] = v.x;
+	json["y"] = v.y;
+	json["z"] = v.z;
 }
 
-MY_ENGINE_META_INFO(int4)
+inline void to_json(nlohmann::json & json, int4 const & v)
 {
-	return members(
-		member("x", &int4::x),
-		member("y", &int4::y),
-		member("z", &int4::z),
-		member("w", &int4::w)
-	);
+	json["x"] = v.x;
+	json["y"] = v.y;
+	json["z"] = v.z;
+	json["w"] = v.w;
 }
 
-MY_ENGINE_META_STD_OSTREAM_OPERATOR(float2) 
-MY_ENGINE_META_STD_OSTREAM_OPERATOR(float3) 
-MY_ENGINE_META_STD_OSTREAM_OPERATOR(float4) 
-MY_ENGINE_META_STD_OSTREAM_OPERATOR(int2) 
-MY_ENGINE_META_STD_OSTREAM_OPERATOR(int3) 
-MY_ENGINE_META_STD_OSTREAM_OPERATOR(int4) 
+// ----------------------------------------------------------------------------
+
+inline void from_json(nlohmann::json const & json, float2 & v)
+{
+	v.x = json["x"];
+	v.y = json["y"];
+}
+
+inline void from_json(nlohmann::json const & json, float3 & v)
+{
+	v.x = json["x"];
+	v.y = json["y"];
+	v.z = json["z"];
+}
+
+inline void from_json(nlohmann::json const & json, float4 & v)
+{
+	v.x = json["x"];
+	v.y = json["y"];
+	v.z = json["z"];
+	v.w = json["w"];
+}
+
+inline void from_json(nlohmann::json const & json, int2 & v)
+{
+	v.x = json["x"];
+	v.y = json["y"];
+}
+
+inline void from_json(nlohmann::json const & json, int3 & v)
+{
+	v.x = json["x"];
+	v.y = json["y"];
+	v.z = json["z"];
+}
+
+inline void from_json(nlohmann::json const & json, int4 & v)
+{
+	v.x = json["x"];
+	v.y = json["y"];
+	v.z = json["z"];
+	v.w = json["w"];
+}
+
+// ----------------------------------------------------------------------------
+
+inline void serialize(float2 const & v, Serializer & s)
+{
+	s.write(v.x, "x");
+	s.write(v.y, "y");
+}
+
+inline void serialize(float3 const & v, Serializer & s)
+{
+	s.write(v.x, "x");
+	s.write(v.y, "y");
+	s.write(v.z, "z");
+}
+
+inline void serialize(float4 const & v, Serializer & s)
+{
+	s.write(v.x, "x");
+	s.write(v.y, "y");
+	s.write(v.z, "z");
+	s.write(v.w, "w");
+}
+
+inline void deserialize(float2 & v, Serializer const & s)
+{
+	s.read(v.x, "x");
+	s.read(v.y, "y");
+}
+
+inline void deserialize(float3 & v, Serializer const & s)
+{
+	s.read(v.x, "x");
+	s.read(v.y, "y");
+	s.read(v.z, "z");
+}
+
+inline void deserialize(float4 & v, Serializer const & s)
+{
+	s.read(v.x, "x");
+	s.read(v.y, "y");
+	s.read(v.z, "z");
+	s.read(v.w, "w");
+}
+
+// ----------------------------------------------------------------------------
+
+inline void serialize(int2 const & v, Serializer & s)
+{
+	s.write(v.x, "x");
+	s.write(v.y, "y");
+}
+
+inline void serialize(int3 const & v, Serializer & s)
+{
+	s.write(v.x, "x");
+	s.write(v.y, "y");
+	s.write(v.z, "z");
+}
+
+inline void serialize(int4 const & v, Serializer & s)
+{
+	s.write(v.x, "x");
+	s.write(v.y, "y");
+	s.write(v.z, "z");
+	s.write(v.w, "w");
+}
+
+inline void deserialize(int2 & v, Serializer const & s)
+{
+	s.read(v.x, "x");
+	s.read(v.y, "y");
+}
+
+inline void deserialize(int3 & v, Serializer const & s)
+{
+	s.read(v.x, "x");
+	s.read(v.y, "y");
+	s.read(v.z, "z");
+}
+
+inline void deserialize(int4 & v, Serializer const & s)
+{
+	s.read(v.x, "x");
+	s.read(v.y, "y");
+	s.read(v.z, "z");
+	s.read(v.w, "w");
+}
 
 // Sketch on how to implement swizzles if we want to
 // union vec2

@@ -4,6 +4,7 @@
 #include "Camera.hpp"
 #include "Noise.hpp"
 #include "jobs.hpp"
+#include "DebugTerrain.hpp"
 
 struct CharacterInput
 {
@@ -18,6 +19,7 @@ CharacterInput get_character_input(Input * input, GameCamera const & camera, flo
 {
 	CharacterInput result = {};
 
+	// something like this, probably
 	// switch(input_most_recent_input_device(input))
 	// {
 	// 	case InputDevice::keyboard:
@@ -71,30 +73,54 @@ struct Character
 	float3 color;
 };
 
-MY_ENGINE_META_INFO(Character)
+inline void to_json(nlohmann::json & json, Character const & c)
 {
-	return members
-	(
-		member("position", &Character::position),
-		member("speed", &Character::speed),
-		member("y_position", &Character::y_position),
-		member("y_velocity", &Character::y_velocity),
-		member("jump_power", &Character::jump_power),
-		member("size", &Character::size),
-		member("color", &Character::color, META_MEMBER_FLAGS_COLOR)
-	);
+	json["position"] = c.position;
+	json["speed"] = c.speed;
+	json["y_position"] = c.y_position;
+	json["y_velocity"] = c.y_velocity;
+	json["jump_power"] = c.jump_power;
+	json["size"] = c.size;
+	json["color"] = c.color;
 }
 
-MY_ENGINE_META_DEFAULT_EDIT(Character)
+inline void from_json(nlohmann::json const & json, Character & c)
+{
+	get_if_value_exists(json, "position", c.position);
+	get_if_value_exists(json, "speed", c.speed);
+	get_if_value_exists(json, "y_position", c.y_position);
+	get_if_value_exists(json, "y_velocity", c.y_velocity);
+	get_if_value_exists(json, "jump_power", c.jump_power);
+	get_if_value_exists(json, "size", c.size);
+	get_if_value_exists(json, "color", c.color);
+}
+
+namespace gui
+{
+	inline bool edit(Character & c)
+	{
+		auto gui = gui_helper();
+		gui.edit("position", c.position);
+		gui.edit("speed", c.speed);
+		gui.edit("y_position", c.y_position);
+		gui.edit("y_velocity", c.y_velocity);
+		gui.edit("jump_power", c.jump_power);
+		gui.edit("size", c.size);
+		gui.edit("color", c.color, META_MEMBER_FLAGS_COLOR);
+		return gui.dirty;
+	}
+}
+
 
 struct CharacterUpdateJob
 {	
-	// And bädäm, just like this, we can update many characters with a price of one
+	// And bädäm, just like this, we can update many characters with a price(complexity) of one
 	Character * 		characters;
 	CharacterInput * 	inputs;
 
-	Noise2D  		ground_noise;
-	float 			ground_height;
+	DebugTerrain *	terrain;
+	float3  		min_position;
+	float3  		max_position;
 
 	void execute(int i) const
 	{
@@ -104,9 +130,9 @@ struct CharacterUpdateJob
 		float3 movement = float3(input.move_x, 0, input.move_z) * input.delta_time * character.speed;
 
 		float3 move_end_position = character.position + movement;
-		move_end_position.y = (ground_noise.evaluate(move_end_position.xz) / 2 + 0.5) * ground_height;
+		move_end_position.y = terrain->get_height(move_end_position.xz);
 
-		character.position = clamp(move_end_position, float3(1,0,1), float3(9,10,9));
+		character.position = clamp(move_end_position, min_position, max_position);
 
 		character.y_velocity -= 10 * input.delta_time;
 

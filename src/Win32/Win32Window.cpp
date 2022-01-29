@@ -100,7 +100,7 @@ LRESULT window_callback(HWND hwnd, UINT message, WPARAM w_param, LPARAM l_param)
 		{
 			// bool handled = ImGui::GetIO().WantCaptureMouse;
 			// if ()
-			bool handled = win32_input_handle_message(&window->input, message, w_param);
+			bool handled = win32_input_handle_keyboard_event(&window->input, message, w_param, l_param);
 			result = handled ? 0 : ::DefWindowProc(hwnd, message, w_param, l_param);
 		} break;
 

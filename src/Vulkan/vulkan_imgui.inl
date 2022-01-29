@@ -1,11 +1,11 @@
 #include <imgui/imgui_impl_vulkan.h>
 #include "../imgui.hpp"
 
-void vulkan_init_imgui(Graphics * g)
+void vulkan_init_imgui(Graphics * context)
 {
 	{
 		VkAttachmentDescription attachment = {};
-		attachment.format = g->swapchain_image_format;
+		attachment.format = context->swapchain_image_format;
 		attachment.samples = VK_SAMPLE_COUNT_1_BIT;
 		attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 		attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -40,7 +40,7 @@ void vulkan_init_imgui(Graphics * g)
 		create_info.dependencyCount = 1;
 		create_info.pDependencies = &dependency;
 
-		VULKAN_HANDLE_ERROR(vkCreateRenderPass(g->device, &create_info, nullptr, &g->imgui.render_pass));
+		VULKAN_HANDLE_ERROR(vkCreateRenderPass(context->device, &create_info, nullptr, &context->imgui.render_pass));
 	}
 
 	{
@@ -56,63 +56,63 @@ void vulkan_init_imgui(Graphics * g)
 		create_info.poolSizeCount = 1;
 		create_info.pPoolSizes = pool_sizes;
 
-		VULKAN_HANDLE_ERROR(vkCreateDescriptorPool(g->device, &create_info, nullptr, &g->imgui.descriptor_pool));
+		VULKAN_HANDLE_ERROR(vkCreateDescriptorPool(context->device, &create_info, nullptr, &context->imgui.descriptor_pool));
 	}
 
-	auto queue_family_indices = find_queue_families(g->physical_device, g->surface);
+	auto queue_family_indices = find_queue_families(context->physical_device, context->surface);
 
 	ImGui_ImplVulkan_InitInfo init_info = {};
-	init_info.Instance = g->instance;
-	init_info.PhysicalDevice = g->physical_device;
-	init_info.Device = g->device;
-	init_info.QueueFamily = g->graphics_queue_family;
-	init_info.Queue = g->graphics_queue;
+	init_info.Instance = context->instance;
+	init_info.PhysicalDevice = context->physical_device;
+	init_info.Device = context->device;
+	init_info.QueueFamily = context->graphics_queue_family;
+	init_info.Queue = context->graphics_queue;
 	init_info.PipelineCache = VK_NULL_HANDLE;
-	init_info.DescriptorPool = g->imgui.descriptor_pool;
+	init_info.DescriptorPool = context->imgui.descriptor_pool;
 	init_info.MinImageCount = 2;
-	init_info.ImageCount = g->swapchain_images.length();
+	init_info.ImageCount = context->swapchain_images.length();
 	init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 	init_info.Allocator = nullptr;
 	init_info.CheckVkResultFn = nullptr;
 
-	ImGui_ImplVulkan_Init(&init_info, g->imgui.render_pass);
+	ImGui_ImplVulkan_Init(&init_info, context->imgui.render_pass);
 
-	auto cmd = begin_single_use_command_buffer(g);
+	auto cmd = begin_single_use_command_buffer(context);
 	ImGui_ImplVulkan_CreateFontsTexture(cmd);
-	execute_single_use_command_buffer(g, cmd);
+	execute_single_use_command_buffer(context, cmd);
 
 	ImGui_ImplVulkan_DestroyFontUploadObjects();
 }
 
-void vulkan_render_imgui(Graphics * g)
+void vulkan_render_imgui(Graphics * context)
 {
-	VirtualFrame & frame = get_current_frame(g);
+	VirtualFrame & frame = get_current_frame(context);
 
 	if (frame.imgui.framebuffer != VK_NULL_HANDLE)
 	{
-		vkDestroyFramebuffer(g->device, frame.imgui.framebuffer, nullptr);
+		vkDestroyFramebuffer(context->device, frame.imgui.framebuffer, nullptr);
 		frame.imgui.framebuffer = VK_NULL_HANDLE;
 	}
 
 	// Todo(Leo): these can be precreated for swapchain, but currently imgui render pass only 
 	// becomes available later....
 	auto framebuffer_info = vk_framebuffer_create_info();
-	framebuffer_info.renderPass = g->imgui.render_pass;
+	framebuffer_info.renderPass = context->imgui.render_pass;
 	framebuffer_info.attachmentCount = 1;
-	framebuffer_info.pAttachments = &g->swapchain_image_views[g->current_image_index];
-	framebuffer_info.width = g->swapchain_extent.width;
-	framebuffer_info.height = g->swapchain_extent.height;
+	framebuffer_info.pAttachments = &context->swapchain_image_views[context->current_image_index];
+	framebuffer_info.width = context->swapchain_extent.width;
+	framebuffer_info.height = context->swapchain_extent.height;
 	framebuffer_info.layers = 1;
 
-	vkCreateFramebuffer(g->device, &framebuffer_info, nullptr, &frame.imgui.framebuffer);
+	vkCreateFramebuffer(context->device, &framebuffer_info, nullptr, &frame.imgui.framebuffer);
 
 
 	auto begin = vk_render_pass_begin_info();
-	begin.renderPass = g->imgui.render_pass;
+	begin.renderPass = context->imgui.render_pass;
 	begin.framebuffer = frame.imgui.framebuffer;
-	// begin.framebuffer = g->swapchain_framebuffers[g->current_image_index];
+	// begin.framebuffer = context->swapchain_framebuffers[context->current_image_index];
 	begin.renderArea.offset = {0, 0};
-	begin.renderArea.extent = {g->swapchain_extent.width, g->swapchain_extent.height};
+	begin.renderArea.extent = {context->swapchain_extent.width, context->swapchain_extent.height};
 	begin.clearValueCount = 0;
 
 	vkCmdBeginRenderPass(frame.command_buffer, &begin, VK_SUBPASS_CONTENTS_INLINE);
@@ -122,17 +122,17 @@ void vulkan_render_imgui(Graphics * g)
 	vkCmdEndRenderPass(frame.command_buffer);
 }
 
-void vulkan_shutdown_imgui(Graphics * g)
+void vulkan_shutdown_imgui(Graphics * context)
 {
-	vkDeviceWaitIdle(g->device);
+	vkDeviceWaitIdle(context->device);
 
 	ImGui_ImplVulkan_Shutdown();
 
-	vkDestroyDescriptorPool(g->device, g->imgui.descriptor_pool, nullptr);
-	vkDestroyRenderPass(g->device, g->imgui.render_pass, nullptr);
+	vkDestroyDescriptorPool(context->device, context->imgui.descriptor_pool, nullptr);
+	vkDestroyRenderPass(context->device, context->imgui.render_pass, nullptr);
 
-	for(auto & frame : g->virtual_frames)
+	for(auto & frame : context->virtual_frames)
 	{
-		vkDestroyFramebuffer(g->device, frame.imgui.framebuffer, nullptr);
+		vkDestroyFramebuffer(context->device, frame.imgui.framebuffer, nullptr);
 	}
 }

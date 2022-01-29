@@ -82,8 +82,11 @@ bool input_key_is_down(Input * input, InputKey key)
 
 namespace
 {
-	InputKey input_key_from_win32_virtual_key(WPARAM v_key)
+	InputKey input_key_from_win32_virtual_key(WPARAM v_key, LPARAM l_param)
 	{
+		// https://stackoverflow.com/questions/5681284/how-do-i-distinguish-between-left-and-right-keys-ctrl-and-alt
+		int extended  = (l_param & 0x01000000) != 0;	
+
 		switch(v_key)
 		{
 			case VK_SPACE: return InputKey::keyboard_space;
@@ -119,14 +122,18 @@ namespace
 			case 'Y': return InputKey::keyboard_y;
 			case 'Z': return InputKey::keyboard_z;
 
+			case VK_CONTROL:
+				return extended ? InputKey::keyboard_right_control : InputKey::keyboard_left_control;
+
+
 			default:
 				return InputKey::invalid;
 		}
 	}
 
-	bool win32_input_handle_message(Input * input, UINT message, WPARAM w_param)
+	bool win32_input_handle_keyboard_event(Input * input, UINT message, WPARAM w_param, LPARAM l_param)
 	{
-		InputKey key = input_key_from_win32_virtual_key(w_param);
+		InputKey key = input_key_from_win32_virtual_key(w_param, l_param);
 		InputKeyState & state = input->keystates[(int)key];
 
 		if(message == WM_KEYDOWN && state != InputKeyState::is_down)
@@ -139,6 +146,18 @@ namespace
 			state = InputKeyState::went_up;
 			return true;
 		}
+
+		// if(key == InputKey::keyboard_left_control || key == InputKey::keyboard_right_control)
+		// {
+		// 	if (input_key_is_down(input, InputKey::keyboard_left_control) || input_key_is_down(input, InputKey::keyboard_right_control))
+		// 	{
+		// 		input->keystates[(int)InputKey::keyboard_any_control] = InputKeyState::is_down;
+		// 	}
+		// 	else
+		// 	{
+		// 		input->keystates[(int)InputKey::keyboard_any_control] = InputKeyState::is_up;
+		// 	}
+		// }
 
 		return false;
 	}

@@ -22,81 +22,8 @@ struct Input;
 
 #include "GrassSystem.hpp"
 #include "WorldSettings.hpp"
-
-struct VoxelSettings
-{
-	int character_octree_depth  = 7;
-	int rat_octree_depth 		= 7;
-
-	int draw_octree_depth 		= 7;
-};
-
-MY_ENGINE_META_INFO(VoxelSettings)
-{
-	return members(
-		member("character_octree_depth", &VoxelSettings::character_octree_depth),
-		member("rat_octree_depth", &VoxelSettings::rat_octree_depth),
-		member("draw_octree_depth", &VoxelSettings::draw_octree_depth)
-	);
-}
-
-MY_ENGINE_META_DEFAULT_EDIT(VoxelSettings)
-
-struct WorldParams
-{
-	float3 world_size 		= float3(20, 10, 20);
-	int3 chunks_in_world 	= int3(3,2,3);
-	int3 voxels_in_chunk 	= int3(16, 16, 16);
-
-	int3 voxels_in_world() const { return chunks_in_world * voxels_in_chunk; }
-	float3 voxels_inside_world_unit() const { return float3(voxels_in_world()) / world_size; }
-	float3 voxel_to_world() const { return float3(1) / voxels_inside_world_unit(); }
-	float3 world_to_voxel() const { return voxels_inside_world_unit(); }
-
-	float3 world_space_min() const { return float3(0,0,0); }
-	float3 world_space_max() const { return world_size; }
-
-	int voxel_count_in_chunk() const { return voxels_in_chunk.x * voxels_in_chunk.y * voxels_in_chunk.z; }
-};
-
-MY_ENGINE_META_INFO(WorldParams)
-{
-	return members(
-		member("world_size", &WorldParams::world_size),
-		member("chunks_in_world", &WorldParams::chunks_in_world),
-		member("voxels_in_chunk", &WorldParams::voxels_in_chunk),
-
-		member("voxels_in_world", &WorldParams::voxels_in_world),
-		member("voxels_inside_world_unit", &WorldParams::voxels_inside_world_unit),
-		member("voxel_to_world", &WorldParams::voxel_to_world),
-		member("world_to_voxel", &WorldParams::world_to_voxel),
-		member("world_space_min", &WorldParams::world_space_min),
-		member("world_space_max", &WorldParams::world_space_max),
-		member("voxel_count_in_chunk", &WorldParams::voxel_count_in_chunk)
-	);
-}
-
-
-struct DebugOptions
-{
-	float a;
-	float b;
-	float c;
-	float d;
-};
-
-MY_ENGINE_META_INFO(DebugOptions)
-{
-	return members
-	(
-		member("a", &DebugOptions::a),
-		member("b", &DebugOptions::b),
-		member("c", &DebugOptions::c),
-		member("d", &DebugOptions::d)
-	);
-}
-
-MY_ENGINE_META_DEFAULT_EDIT(DebugOptions)
+#include "DebugTerrain.hpp"
+#include "DrawOptions.hpp"
 
 enum struct CameraMode { editor, game };
 
@@ -119,16 +46,19 @@ struct Engine
 	ArenaAllocator voxel_allocator;
 
 	NoiseSettings noise_settings = {};
-	// WorldParams world_params = {};
-	DebugOptions debug_options = {};
+	float4 debug_options = {};
 	VoxelSettings voxel_settings = {};
 	LightSettings light_settings = {};
+	DebugTerrainSettings debug_terrain_settings = {};
 
 	GrassSettings grass_settings;
 	WorldSettings world_settings = {};
 
+	DrawOptions draw_options = {};
+
 	// System??
 	GrassSystem grass = {};
+	DebugTerrain debug_terrain = {};
 
 	bool running;
 
@@ -136,7 +66,7 @@ struct Engine
 
 	CameraMode camera_mode;
 
-	Character character = { float3(5,5,5), 3.0f };
+	Character character = { float3(5,5,5), 3.0f };	
 
 	Gradient mouse_colors;
 	Gradient ground_colors;
@@ -149,21 +79,38 @@ struct Engine
 	void refresh(Window *, Input *);
 };
 
-MY_ENGINE_META_INFO(Engine)
+inline void to_json (nlohmann::json & json, Engine const & engine)
 {
-	return members(
-		member("camera", &Engine::camera),
-		member("game_camera", &Engine::game_camera),
-		member("character", &Engine::character),
-		member("input_settings", &Engine::input_settings),
-		member("noise_settings", &Engine::noise_settings),
-		member("voxel_settings", &Engine::voxel_settings),
-		member("debug_options", &Engine::debug_options),
-		member("light_settings", &Engine::light_settings),
-		member("grass_settings", &Engine::grass_settings),
-		member("world_settings", &Engine::world_settings),
-		member("mouse_colors", &Engine::mouse_colors)
-	);
+	json["camera"] 						= engine.camera;
+	json["game_camera"] 				= engine.game_camera;
+	json["character"] 					= engine.character;
+	json["input_settings"] 				= engine.input_settings;
+	json["noise_settings"] 				= engine.noise_settings;
+	json["voxel_settings"] 				= engine.voxel_settings;
+	json["debug_options"] 				= engine.debug_options;
+	json["light_settings"] 				= engine.light_settings;
+	json["grass_settings"] 				= engine.grass_settings;
+	json["world_settings"] 				= engine.world_settings;
+	json["mouse_colors"] 				= engine.mouse_colors;
+	json["draw_options"] 				= engine.draw_options;
+	json["debug_terrain_settings"] 		= engine.debug_terrain_settings;
+}
+
+inline void from_json (nlohmann::json const & json, Engine & engine)
+{
+	get_if_value_exists(json, "camera", engine.camera);
+	get_if_value_exists(json, "game_camera", engine.game_camera);
+	get_if_value_exists(json, "character", engine.character);
+	get_if_value_exists(json, "input_settings", engine.input_settings);
+	get_if_value_exists(json, "noise_settings", engine.noise_settings);
+	get_if_value_exists(json, "voxel_settings", engine.voxel_settings);
+	get_if_value_exists(json, "debug_options", engine.debug_options);
+	get_if_value_exists(json, "light_settings", engine.light_settings);
+	get_if_value_exists(json, "grass_settings", engine.grass_settings);
+	get_if_value_exists(json, "world_settings", engine.world_settings);
+	get_if_value_exists(json, "mouse_colors", engine.mouse_colors);
+	get_if_value_exists(json, "draw_options", engine.draw_options);
+	get_if_value_exists(json, "debug_terrain_settings", engine.debug_terrain_settings);
 }
 
 bool consume_event(bool & event)
@@ -180,13 +127,18 @@ void load_imgui_style_from_json();
 
 Engine initialize_engine()
 {
+	std::cout << sizeof(nlohmann::json) << " == json size\n";
+
 	Engine e = {};
 
 	load_from_json(e, "data/engine.json");
 	load_imgui_style_from_json();
 
+	// serializer_test();
+
 	// Game systems
-	e.grass.initialize(e.grass_settings, global_debug_allocator, e.noise_settings);
+	e.debug_terrain.init(e.debug_terrain_settings);
+	e.grass.init(e.grass_settings, global_debug_allocator, e.debug_terrain);
 
 	// e.input_settings = load_input_settings();
 
@@ -214,7 +166,6 @@ void engine_shutdown(Engine & engine)
 	platform_memory_release(engine.voxel_allocator.return_memory_back_to_where_it_was_received());
 }
 
-// void generate_world(Engine &);
 
 namespace gui
 {
@@ -294,6 +245,11 @@ void engine_gui(Engine & engine, Window * window)
 		collapsing_box("Debug Lighting", engine.light_settings);
 		collapsing_box("World Settings", engine.world_settings);
 		collapsing_box("Grass", engine.grass);
+		collapsing_box("Draw Options", engine.draw_options);
+		if (collapsing_box("Terrain", engine.debug_terrain_settings))
+		{
+			engine.debug_terrain.refresh();
+		}
 
 		if (Button("Save Changes"))
 		{
@@ -303,7 +259,11 @@ void engine_gui(Engine & engine, Window * window)
 		edit("Mouse Colors", engine.mouse_colors);
 		edit("Ground Colors", engine.ground_colors);
 
-		ImGui::Checkbox("Show Demo", &engine.show_imgui_demo);
+		if (ImGui::Button("Open Imgui Demo"))
+		{
+			engine.show_imgui_demo = true;
+		}
+
 		if (ImGui::Button("Open Style Editor"))
 		{
 			engine.show_imgui_style_editor = true;
@@ -314,7 +274,7 @@ void engine_gui(Engine & engine, Window * window)
 
 	if (engine.show_imgui_demo)
 	{
-		ImGui::ShowDemoWindow();
+		ImGui::ShowDemoWindow(&engine.show_imgui_demo);
 	}
 
 	if (engine.show_imgui_style_editor)

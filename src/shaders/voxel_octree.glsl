@@ -2,63 +2,8 @@
 #define VOXEL_OCTREE_GLSL_INCLUDED
 
 #include "raycast.glsl"
-
-struct VoxelData
-{
-	vec4 color; 	// only xyz
-	vec4 normal; 	// only xyz
-	ivec4 material_child_offset; // x: material, y: child_offset
-};
-
-VoxelData empty_voxel_data()
-{
-	VoxelData v;
-	v.color = vec4(0,0,0,0);
-	v.material_child_offset = ivec4(0,0,0,0);
-	return v;
-}
-
-int get_material(VoxelData data)
-{
-	return data.material_child_offset.x;
-}
-
-int get_child_offset(VoxelData data)
-{
-	return data.material_child_offset.y;
-}
-
-layout(std430, set = PER_FRAME_SET, binding = PER_FRAME_VOXEL_OCTREE_DATA) readonly buffer Voxels
-{
-	VoxelData data [];
-} voxels;
-
-
-layout(set = PER_FRAME_SET, binding = PER_FRAME_VOXEL_OCTREE_INFO) readonly uniform VoxelInfo
-{
-	// xyz has 3 dimensions, and w/[3] has total elements in block, i.e. x*y*z
-	ivec4 max_octree_depth; // voxels_in_chunk;
-	ivec4 _3; // chunks_in_world;
-	ivec4 _4; // voxels_in_world;
-	
-	vec4 world_min;
-	vec4 world_max;
-	
-	vec4 _0;//VS_to_WS;
-	vec4 _1;//WS_to_VS;
-
-	vec4 _5;
-} voxel_info;
-
-int get_max_sample_depth()
-{
-	return voxel_info.max_octree_depth.x;
-}
-
-// bool outside_bounds(vec3 position_WS)
-// {
-// 	return any(lessThan(position_WS, vec3(0,0,0))) && any(greaterThan(position_WS, vec3(10,10,10)));
-// }
+#include "random.glsl"
+#include "voxel_data.glsl"
 
 // position_WS is debug thing
 VoxelData get_octree_voxel(ivec3 voxel, int in_depth, out int out_depth, vec3 position_WS)
@@ -102,14 +47,9 @@ VoxelData get_octree_voxel(ivec3 voxel, int in_depth, out int out_depth, vec3 po
 	return voxels.data[node_index];
 }
 
-const vec4 air_color = vec4(0.92, 0.95, 1.0, 0.01);
-
-vec4 traverse_octree_2(const Ray ray, float max_distance, bool bounce)
+vec4 traverse_octree_lights(const Ray ray, float max_distance)
 {
-	vec3 world_min = voxel_info.world_min.xyz;
-	vec3 world_max = voxel_info.world_max.xyz;
-
-	world_max = vec3(10,10,10);
+	vec3 world_max = get_world_size();
 
 	int max_octree_depth = get_max_sample_depth();
 
@@ -157,13 +97,24 @@ vec4 traverse_octree_2(const Ray ray, float max_distance, bool bounce)
 	float t_WS = 0;
 
 	// float distance_traveled_thrrou
-	vec4 color = vec4(0,0,0,0);
+	vec4 color = vec4(0,0,0,1);
+
+	vec3 direct_light = max(0, dot(-lighting.direct_direction.xyz, ray.direction)) * lighting.direct_color.rgb;
+	vec3 ambient_light = lighting.ambient_color.rgb;
+	vec3 light = direct_light + ambient_light;
+
+	color.rgb = light;
 
 	// insanity
 	int sanity_check = 1000;
 	while(sanity_check > 0)
 	{
 		sanity_check -= 1;
+
+		if ((t_start + t_WS) > max_distance)
+		{
+			return color;
+		}
 
 		vec3 position_WS = start_WS + direction_WS * t_WS;
 		vec3 position_VS = position_WS * WS_to_VS;
@@ -181,37 +132,19 @@ vec4 traverse_octree_2(const Ray ray, float max_distance, bool bounce)
 		int material = get_material(data);
 		if (material > 0)
 		{
-			float alpha = 1.0 - ((t_WS + t_start) / max_distance);
-
 			if (material == 2)
 			{
-				color = vec4(data.color.xyz, alpha);
-
-				if (bounce)
-				{
-					// Ray new_ray;
-					// new_ray.origin = position_WS;
-					// new_ray.direction = -lighting.direct_direction.xyz;
-					// new_ray.inverse_direction = 1.0 / new_ray.direction;
-					
-					// vec4 new_color = traverse_octree(new_ray, 10, false);
-
-					// if (new_color.a > 0.5)
-					// {
-					// 	color *= 0.5;
-					// } 
-				}
-
+				color = vec4(data.color.xyz, 1);
 			}
 			else
 			{
-				vec3 direct_light = max(0, dot(data.normal.xyz, -lighting.direct_direction.xyz)) * lighting.direct_color.rgb;
-				vec3 ambient_light = lighting.ambient_color.rgb;
-				vec3 light = direct_light + ambient_light;
-				color = vec4(data.color.xyz * light, alpha);
+				vec3 direct_diffuse = max(0, dot(data.normal.xyz, -lighting.direct_direction.xyz)) * lighting.direct_color.rgb;
+				vec3 gi_diffuse 	= lighting.ambient_color.rgb;
+				vec3 light 			= direct_diffuse + gi_diffuse;
+				color 				= vec4(data.color.xyz * light, 1);
 			}
+
 			break;
-			// return data;
 		}
 
 		// Compute distance to move in local depth space, depth as in octree depth, so we 
@@ -229,15 +162,11 @@ vec4 traverse_octree_2(const Ray ray, float max_distance, bool bounce)
 	}
 
 	return color;
-	// return empty_voxel_data();
 }
 
-vec4 traverse_octree(const Ray ray, float max_distance, bool bounce)
+vec4 traverse_octree(const Ray ray, float max_distance)
 {
-	vec3 world_min = voxel_info.world_min.xyz;
-	vec3 world_max = voxel_info.world_max.xyz;
-
-	world_max = vec3(10,10,10);
+	vec3 world_max = get_world_size();
 
 	int max_octree_depth = get_max_sample_depth();
 
@@ -297,8 +226,8 @@ vec4 traverse_octree(const Ray ray, float max_distance, bool bounce)
 		vec3 position_VS = position_WS * WS_to_VS;
 		ivec3 voxel = ivec3(floor(position_VS));
 
-		// This may need to checked only at the end of loop
-		if (any(equal(voxel, just_out))) // Apparently this is not needed, but I am  not sure yet || outside_bounds(position_WS))
+		// This may need to be checked only at the end of loop
+		if (any(equal(voxel, just_out))) // Apparently this is not needed, but I am  not sure yet: || outside_bounds(position_WS))
 		{
 			break;
 		}
@@ -309,40 +238,45 @@ vec4 traverse_octree(const Ray ray, float max_distance, bool bounce)
 		int material = get_material(data);
 		if (material > 0)
 		{
-			float alpha = 1.0 - ((t_WS + t_start) / max_distance);
-
-			if (material == 2)
+			if (get_draw_mode() == DRAW_MODE_NORMAL)
 			{
-				color = vec4(data.color.xyz, alpha);
+				int LS_to_VS 	= 1 << (max_octree_depth - local_depth);
+				float LS_to_WS 	= LS_to_VS * VS_to_WS.x;
 
-				if (bounce)
-				{
-					Ray new_ray;
-					int LS_to_VS 		= 1 << (max_octree_depth - local_depth);
+				Ray new_ray_0;
+				vec3 normal_0 = data.normal.xyz + random_direction(position_WS) * get_roughness();
+				new_ray_0.direction = normalize(reflect(ray.direction, normal_0));
+				new_ray_0.origin = (vec3(voxel) * VS_to_WS + 1.0 * LS_to_WS * new_ray_0.direction);
+				new_ray_0.inverse_direction = 1.0 / new_ray_0.direction;
+				
+				Ray new_ray_1;
+				vec3 normal_1 = data.normal.xyz + random_direction(position_WS.yzx) * get_roughness();
+				new_ray_1.direction = normalize(reflect(ray.direction, normal_1));
+				new_ray_1.origin = (vec3(voxel) * VS_to_WS + 1.0 * LS_to_WS * new_ray_1.direction);
+				new_ray_1.inverse_direction = 1.0 / new_ray_1.direction;
+				
+				Ray new_ray_2;
+				vec3 normal_2 = data.normal.xyz + random_direction(position_WS.zxy) * get_roughness();
+				new_ray_2.direction = normalize(reflect(ray.direction, normal_2));
+				new_ray_2.origin = (vec3(voxel) * VS_to_WS + 1.0 * LS_to_WS * new_ray_2.direction);
+				new_ray_2.inverse_direction = 1.0 / new_ray_2.direction;
 
+				vec3 direct_diffuse = max(0, dot(-lighting.direct_direction.xyz, data.normal.xyz)) * lighting.direct_color.rgb;
+				vec3 gi_specular_0 = traverse_octree_lights(new_ray_0, get_bounce_ray_length()).rgb;
+				vec3 gi_specular_1 = traverse_octree_lights(new_ray_1, get_bounce_ray_length()).rgb;
+				vec3 gi_specular_2 = traverse_octree_lights(new_ray_2, get_bounce_ray_length()).rgb;
+				vec3 gi_specular = (gi_specular_0 + gi_specular_1 + gi_specular_2) / 3;
 
-					new_ray.direction = -lighting.direct_direction.xyz;
-					new_ray.origin = (position_VS * VS_to_WS + 1.0 * LS_to_VS * VS_to_WS * new_ray.direction);// position_WS;
-					new_ray.inverse_direction = 1.0 / new_ray.direction;
-					
-					vec4 new_color = traverse_octree_2(new_ray, 10, false);
-
-					if (new_color.a > 0.5)
-					{
-						color.rgb *= 0.5;
-					} 
-				}
-
-			}
-			else
-			{
-				vec3 direct_light = max(0, dot(data.normal.xyz, -lighting.direct_direction.xyz)) * lighting.direct_color.rgb;
-				vec3 ambient_light = lighting.ambient_color.rgb;
-				vec3 light = direct_light + ambient_light;
+				vec3 light = direct_diffuse + gi_specular;
+				float alpha = 1.0 - ((t_WS + t_start) / max_distance);
 				color = vec4(data.color.xyz * light, alpha);
 			}
+			else if (get_draw_mode() == DRAW_MODE_NORMALS)
+			{
+				color = vec4((data.normal.xyz + 1) / 2, 1);
+			}
+
 			break;
-			// return data;
 		}
 
 		// Compute distance to move in local depth space, depth as in octree depth, so we 
@@ -354,13 +288,12 @@ vec4 traverse_octree(const Ray ray, float max_distance, bool bounce)
 
 		vec3 t_max_LS 								= (step(0, direction_LS) - fract(position_LS)) / direction_LS;
 		float t_max_min_LS 							= min(min(t_max_LS.x, t_max_LS.y), t_max_LS.z);
-		float distance_to_move_in_this_voxel_WS 	= t_max_min_LS * LS_to_VS * VS_to_WS.x; // LOL THIS MEANS ONLY CUBIC GRID WORKS NOW
+		float distance_to_move_in_this_voxel_WS 	= t_max_min_LS * LS_to_VS * VS_to_WS.x;
 
 		t_WS += distance_to_move_in_this_voxel_WS + skinwidth;
 	}
 
 	return color;
-	// return empty_voxel_data();
 }
 
 #endif // VOXEL_OCTREE_GLSL_INCLUDED

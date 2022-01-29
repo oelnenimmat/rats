@@ -81,12 +81,20 @@ namespace
 
 	void create_compute_pipeline(Graphics * context, GraphicsPipelineLayout * layout)
 	{	
-		// Mockup arguments
+		if (context->compute_pipeline_created)
+		{
+			vkDeviceWaitIdle(context->device);
+
+			// Todo(Leo): clear header mess...
+			void destroy_compute_pipeline(Graphics*);
+
+			destroy_compute_pipeline(context);
+		}
 
 		int per_frame_buffer_count 					= layout->per_frame_buffer_count;
 		GraphicsBufferType * per_frame_buffer_types = layout->per_frame_buffer_types;
 
-		context->per_frame_buffers = Array<ComputeBuffer>(per_frame_buffer_count, *context->persistent_allocator, AllocationType::zero_memory);
+		// context->per_frame_buffers = Array<ComputeBuffer>(per_frame_buffer_count, *context->persistent_allocator, AllocationType::zero_memory);
 
 		// -------------------------------------------------------------
 		
@@ -194,15 +202,24 @@ namespace
 		{
 			VULKAN_HANDLE_ERROR(vkAllocateDescriptorSets(context->device, &voxel_buffer_descriptor_allocate, &frame.per_frame_descriptor_set));
 		}
+
+		context->compute_pipeline_created = true;
 	}	
 
 	void destroy_compute_pipeline(Graphics * context)
 	{
+		if (context->compute_pipeline_created == false)
+		{
+			return;
+		}
+
 		vkDestroyDescriptorPool(context->device, context->compute_descriptor_pool, nullptr);
 		// vkDestroyDescriptorSetLayout(context->device, context->compute_descriptor_set_layoyt, nullptr);
 		vkDestroyDescriptorSetLayout(context->device, context->compute_render_target_descriptor_set_layout, nullptr);
 		vkDestroyDescriptorSetLayout(context->device, context->per_frame_descriptor_set_layout, nullptr);
 		vkDestroyPipelineLayout(context->device, context->compute_pipeline_layout, nullptr);
 		vkDestroyPipeline(context->device, context->compute_pipeline, nullptr);
+
+		context->compute_pipeline_created = false;
 	}
 }

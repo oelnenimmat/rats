@@ -1,4 +1,39 @@
-// #include "vectors.hpp"
+#include "vectors.hpp"
+
+/*
+inline std::ostream & operator << (std::ostream & os, float2 const & v)
+{
+	return os << "(" << v.x << "," << v.y << ")";
+}
+
+inline std::ostream & operator << (std::ostream & os, float3 const & v)
+{
+	return os << "(" << v.x << "," << v.y << "," << v.z << ")";
+}
+
+inline std::ostream & operator << (std::ostream & os, float4 const & v)
+{
+	return os << "(" << v.x << "," << v.y << "," << v.z << "," << v.w << ")";
+}
+
+// ----------------------------------------------------------------------------
+
+inline std::ostream & operator << (std::ostream & os, int2 const & v)
+{
+	return os << "(" << v.x << "," << v.y << ")";
+}
+
+inline std::ostream & operator << (std::ostream & os, int3 const & v)
+{
+	return os << "(" << v.x << "," << v.y << "," << v.z << ")";
+}
+
+inline std::ostream & operator << (std::ostream & os, int4 const & v)
+{
+	return os << "(" << v.x << "," << v.y << "," << v.z << "," << v.w << ")";
+}
+*/
+
 
 // #define VECTOR_OPERATOR_IMPLEMENTATION
 // #define VECTOR_FUNCTIONS_IMPLEMENTATION

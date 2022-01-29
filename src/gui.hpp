@@ -2,8 +2,10 @@
 
 // This is maybe in a wrong place, its subsystem kind of thing
 #include "imgui.hpp"
+
 #include <imgui/imgui.h>
 #include <imgui/imgui_color_gradient.hpp>
+#include "imgui_style.hpp"
 
 #include "vectors.hpp"
 
@@ -31,6 +33,32 @@ struct GuiHelper
 		return edited;
 	}
 
+/*
+	template <typename T>
+	bool edit(T & t)
+	{
+		bool edited = edit(t);
+		dirty = edited || dirty;
+		return edited;
+	}
+
+*/
+	template <typename T>
+	bool edit(char const * label, T & t)
+	{
+		bool edited = gui::edit(label, t);
+		dirty = edited || dirty;
+		return edited;
+	}
+
+	template <typename T>
+	bool edit(char const * label, T & t, int flags)
+	{
+		bool edited = gui::edit(label, t, flags);
+		dirty = edited || dirty;
+		return edited;
+	}
+
 	// bool edit_float3(char const * label, float3 & v)
 	// {	
 	// 	bool edited = DragFloat3(label, &v);
@@ -54,16 +82,18 @@ namespace gui
 namespace gui
 {
 	template<typename T>
-	void collapsing_box(char const * label, T & t)
+	bool collapsing_box(char const * label, T & t)
 	{
+		bool edited = false;
 		if (CollapsingHeader(label))
 		{
 			PushID(label);
-			edit(t);
+			edited = edit(t);
 			PopID();
 
 			Separator();
 		}
+		return edited;
 	}
 
 
@@ -98,9 +128,17 @@ namespace gui
 		return InputInt3(label, &i);
 	}
 
-	inline bool edit(char const * label, float3 & f)
+	inline bool edit(char const * label, float3 & f, int flags = 0)
 	{
-		return DragFloat3(label, &f, 0.01f);
+		if (flags == 1)
+		{
+			return ColorEdit3(label, &f);
+		}
+		else
+		{
+			return DragFloat3(label, &f, 0.01f);
+		}
+
 	}
 
 	inline bool edit(char const * label, int4 & i)
@@ -113,7 +151,7 @@ namespace gui
 		return DragFloat4(label, &f, 0.01f);
 	}
 
-
+/*
 	// Todo(mayybe bad idea...)
 	inline void default_display(char const * name, int const & i)
 	{
@@ -144,4 +182,5 @@ namespace gui
 	{
 		Text("%s: (%.3f, %.3f, %.3f)", name, f.x, f.y, f.z);
 	}
+*/
 }

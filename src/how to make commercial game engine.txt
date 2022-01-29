@@ -1,0 +1,13 @@
+how to make commercial game engine
+	first cute and easy, then powerful
+	conceptual chunks
+		-> generic is inefficient, in program and design
+		-> specific is efficient, in program and design
+
+		probably basically a module system, but waaay better
+
+		applies to both the process of making and the final product:
+			solve only problems that require solving
+			efficiency requires assumptions
+			assumptions narrow down userbase
+				-> make assumptions configurable per project

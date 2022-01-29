@@ -11,10 +11,21 @@ layout(set = 0, binding = 0, rgba8) uniform writeonly image2D result_image;
 #define PER_FRAME_CAMERA 2
 #define PER_FRAME_LIGHTING 3
 
+#define DRAW_MODE_NORMAL 0 	// lol these are so different
+#define DRAW_MODE_NORMALS 1
+
+#define DRAW_METHOD_OCTREE 0
+#define DRAW_METHOD_CHUNK_TREE 1
+
+
 layout(set = PER_FRAME_SET, binding = PER_FRAME_CAMERA) uniform Camera
 {
 	mat4 view;
-	vec4 max_distance;
+	vec4 max_distance_X_field_of_view_Y;
+
+	vec4 world_size;
+	vec4 debug_options;
+	ivec4 draw_options; // x: DRAW_MODE_, y: DRAW_METHOD_
 } camera;
 
 layout(set = PER_FRAME_SET, binding = PER_FRAME_LIGHTING) uniform Lighting
@@ -26,12 +37,41 @@ layout(set = PER_FRAME_SET, binding = PER_FRAME_LIGHTING) uniform Lighting
 
 float get_max_distance()
 {
-	return camera.max_distance.x;
+	return camera.max_distance_X_field_of_view_Y.x;
 }	
 
+float get_field_of_view()
+{
+	return camera.max_distance_X_field_of_view_Y.y;
+}
 
+float get_smoothness()
+{
+	return clamp(camera.debug_options.x, 0, 1);
+}
+
+float get_bounce_ray_length()
+{
+	return camera.debug_options.y;
+}
+
+vec3 get_world_size()
+{
+	return vec3(camera.world_size.x, camera.world_size.x, camera.world_size.x);
+}
+
+int get_draw_mode()
+{
+	return camera.draw_options.x;
+}
+
+int get_draw_method()
+{
+	return camera.draw_options.y;
+}
 
 #include "raycast.glsl"
+#include "chunktree.glsl"
 #include "voxel_octree.glsl"
 
 Ray get_camera_ray()
@@ -44,7 +84,7 @@ Ray get_camera_ray()
 	Ray ray;
 	ray.origin = (camera.view * vec4(0,0,0,1)).xyz;
 	
-	ray.direction = normalize(vec3(uv, 1.6));
+	ray.direction = normalize(vec3(uv, get_field_of_view()));
 	ray.direction = (camera.view * vec4(ray.direction, 0)).xyz;
 
 	ray.inverse_direction = 1.0 / ray.direction;
@@ -72,16 +112,30 @@ void main()
 		// background_color = mix(background_color, vec3(avg_value, avg_value, avg_value), 0.6);
 	}
 	vec3 color = background_color;
+	// color = vec3(0,0,0);
 
-	vec4 ray_result_color = traverse_octree(camera_ray, get_max_distance(), true);
 
-	float src_alpha 			= clamp(ray_result_color.a, 0, 1);
-	float one_minus_src_alpha 	= 1.0 - src_alpha;
-	color = src_alpha * ray_result_color.rgb + one_minus_src_alpha * color;
+	if (get_draw_method() == DRAW_METHOD_OCTREE)
+	{
+		vec4 ray_result_color = traverse_octree(camera_ray, get_max_distance());
+	
+		float src_alpha 			= clamp(ray_result_color.a, 0, 1);
+		float one_minus_src_alpha 	= 1.0 - src_alpha;
+		color = src_alpha * ray_result_color.rgb + one_minus_src_alpha * color;
+	}
+	else
+	{
+		vec4 ray_result_color = traverse_chunktree(camera_ray, get_max_distance());
+	
+		float src_alpha 			= clamp(ray_result_color.a, 0, 1);
+		float one_minus_src_alpha 	= 1.0 - src_alpha;
+		color = src_alpha * ray_result_color.rgb + one_minus_src_alpha * color;
+	}
+
+	vec4 result = vec4(color, 1);    
 
 	ivec2 store_position = ivec2(gl_GlobalInvocationID.xy);
 	store_position.y = imageSize(result_image).y - store_position.y;
-	vec4 result = vec4(color, 1);    
 	imageStore(result_image, store_position, result);
 }
 

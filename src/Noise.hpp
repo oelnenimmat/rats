@@ -23,11 +23,6 @@ struct Noise2D
 		frequency(frequency)
 	{}
 
-	// float evaluate(float2 position) const
-	// {
-	// 	return evaluate_value_noise(position);
-	// }
-
 	struct ValueGradient
 	{
 		static float evaluate(SmallXXHash hash, float x, float y)
@@ -95,16 +90,31 @@ struct NoiseSettings
 	float amplitude = 2;
 };
 
-MY_ENGINE_META_INFO(NoiseSettings)
+inline void to_json(nlohmann::json & json, NoiseSettings const & noise_settings)
 {
-	return members(
-		member("seed", &NoiseSettings::seed),
-		member("frequency", &NoiseSettings::frequency),
-		member("amplitude", &NoiseSettings::amplitude)
-	);
+	SERIALIZE(noise_settings, seed);
+	SERIALIZE(noise_settings, frequency);
+	SERIALIZE(noise_settings, amplitude);
 }
 
-MY_ENGINE_META_DEFAULT_EDIT(NoiseSettings)
+inline void from_json(nlohmann::json const & json, NoiseSettings & noise_settings)
+{
+	DESERIALIZE(noise_settings, seed);
+	DESERIALIZE(noise_settings, frequency);
+	DESERIALIZE(noise_settings, amplitude);
+}
+
+namespace gui
+{
+	inline bool edit(NoiseSettings & noise_settings)
+	{
+		auto gui = gui_helper();
+		gui.edit("seed", noise_settings.seed);
+		gui.edit("frequency", noise_settings.frequency);
+		gui.edit("amplitude", noise_settings.amplitude);
+		return gui.dirty;
+	}
+}
 
 Noise2D make_noise(NoiseSettings const & settings)
 {

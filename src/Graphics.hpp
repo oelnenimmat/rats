@@ -33,6 +33,12 @@ struct GraphicsPipelineLayout
 	GraphicsBufferType * 	per_frame_buffer_types;
 };
 
+
+int graphics_create_buffer(Graphics*, size_t size, GraphicsBufferType type);
+void graphics_destroy_buffer(Graphics*, int buffer_handle);
+bool graphics_bind_buffer(Graphics*, int buffer_handle, int index_in_shader, GraphicsBufferType type);
+void graphics_write_buffer(Graphics*, int buffer_handle, size_t size, void * data);
+
 [[nodiscard]] bool graphics_create_compute_pipeline(Graphics*, GraphicsPipelineLayout*);
-[[nodiscard]] bool graphics_create_user_buffer(Graphics*, size_t size, GraphicsBufferType type, int buffer_index);
-void graphics_write_user_buffer(Graphics*, int buffer_index, size_t size, void * data);
+// [[nodiscard]] bool graphics_create_user_buffer(Graphics*, size_t size, GraphicsBufferType type, int buffer_index);
+// void graphics_write_user_buffer(Graphics*, int buffer_index, size_t size, void * data);

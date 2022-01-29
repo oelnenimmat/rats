@@ -26,7 +26,20 @@ struct SmallXXHash
 
 	SmallXXHash eat(uint data) const
 	{
-		return SmallXXHash(rotate_left(accumulator + data * primeC, 17) * primeD);
+		return SmallXXHash(rotate_left(
+			accumulator + data * primeC,
+			17
+		) * primeD);
+	}
+
+
+	// testing
+	SmallXXHash eat(float data) const
+	{
+		return SmallXXHash(rotate_left(
+			accumulator + *reinterpret_cast<uint*>(&data) * primeC, 
+			17
+		) * primeD);
 	}
 
 	float get_float_B_01() const
