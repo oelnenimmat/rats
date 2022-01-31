@@ -5,11 +5,10 @@
 #include "random.glsl"
 #include "voxel_data.glsl"
 
-// position_WS is debug thing
-VoxelData get_octree_voxel(ivec3 voxel, int in_depth, out int out_depth, vec3 position_WS)
+VoxelData get_octree_voxel(const ivec3 voxel, int in_depth, out int out_depth)
 {
 	// This means THE outer most voxel, within which all other voxels are
-	// Also known as the Root Node
+	// Also known as The Root Node
 	int node_index = 0;
 	int current_depth = 0;
 
@@ -25,9 +24,9 @@ VoxelData get_octree_voxel(ivec3 voxel, int in_depth, out int out_depth, vec3 po
 			// in_depth - current_depth gives us a power of 2 to describe transform from "in" level
 			// to "current" level. +1 means that we are looking one level deeper.
 			// current_depth will never reach in_depth, so we can always look one level deeper
-			int next_depth = current_depth + 1;
+			int next_depth 					= current_depth + 1;
 			ivec3 voxel_at_one_level_deeper = voxel / (1 << (in_depth - next_depth));
-			ivec3 voxel_in_parent = voxel_at_one_level_deeper % 2;
+			ivec3 voxel_in_parent 			= voxel_at_one_level_deeper % 2;
 
 			// These are same in effect, but one or the other might be faster, but which one?
 			// int data_index_in_parent = int(dot(ivec3(1,2,4), voxel_in_parent));
@@ -57,13 +56,13 @@ vec4 traverse_octree_lights(const Ray ray, float max_distance)
 	ivec3 chunks_in_world = ivec3(1,1,1); // voxel_info.chunks_in_world.xyz;
 	ivec3 voxels_in_world = voxels_in_chunk * chunks_in_world;
 
-	float t_start;
+	float t_start = 0;
 
 	// this means we are totally outside of defined regions, we can quit
-	if (raycast(ray, world_min, world_max, max_distance + 1, t_start) == false)
-	{
-		return vec4(0,0,0,0);
-	}
+	// if (raycast(ray, world_min, world_max, max_distance + 1, t_start) == false)
+	// {
+	// 	return vec4(0,0,0,0);
+	// }
 
 	// We don't use this, but it helps to word out where VS_to_WS and WS_to_VS come from
 	vec3 voxels_inside_world_unit = vec3(voxels_in_world) / world_max;
@@ -96,7 +95,6 @@ vec4 traverse_octree_lights(const Ray ray, float max_distance)
 
 	float t_WS = 0;
 
-	// float distance_traveled_thrrou
 	vec4 color = vec4(0,0,0,1);
 
 	vec3 direct_light = max(0, dot(-lighting.direct_direction.xyz, ray.direction)) * lighting.direct_color.rgb;
@@ -127,7 +125,7 @@ vec4 traverse_octree_lights(const Ray ray, float max_distance)
 		}
 
 		int local_depth;
-		VoxelData data = get_octree_voxel(voxel, max_octree_depth, local_depth, position_WS);
+		VoxelData data = get_octree_voxel(voxel, max_octree_depth, local_depth);
 
 		int material = get_material(data);
 		if (material > 0)
@@ -168,10 +166,12 @@ vec4 traverse_octree(const Ray ray, float max_distance)
 {
 	vec3 world_max = get_world_size();
 
+	// this is kinda unnecessary for the algorithm, but it provides a way to 
+	// do less stuff if wanted
 	int max_octree_depth = get_max_sample_depth();
 
-	ivec3 voxels_in_chunk = ivec3(1,1,1) << max_octree_depth; // voxel_info.voxels_in_chunk.xyz
-	ivec3 chunks_in_world = ivec3(1,1,1); // voxel_info.chunks_in_world.xyz;
+	ivec3 voxels_in_chunk = ivec3(1,1,1) << max_octree_depth;
+	ivec3 chunks_in_world = ivec3(1,1,1);
 	ivec3 voxels_in_world = voxels_in_chunk * chunks_in_world;
 
 	float t_start;
@@ -213,7 +213,6 @@ vec4 traverse_octree(const Ray ray, float max_distance)
 
 	float t_WS = 0;
 
-	// float distance_traveled_thrrou
 	vec4 color = vec4(0,0,0,0);
 
 	// insanity
@@ -233,47 +232,56 @@ vec4 traverse_octree(const Ray ray, float max_distance)
 		}
 
 		int local_depth;
-		VoxelData data = get_octree_voxel(voxel, max_octree_depth, local_depth, position_WS);
+		VoxelData data = get_octree_voxel(voxel, max_octree_depth, local_depth);
 
 		int material = get_material(data);
 		if (material > 0)
 		{
-			if (get_draw_mode() == DRAW_MODE_NORMAL)
+			int draw_mode = get_draw_mode();
+			if (draw_mode == DRAW_MODE_LIT)
 			{
 				int LS_to_VS 	= 1 << (max_octree_depth - local_depth);
 				float LS_to_WS 	= LS_to_VS * VS_to_WS.x;
 
 				float normal_offset = get_normal_offset();
+				vec3 voxel_center_WS = (vec3(voxel) + vec3(0.5, 0.5, 0.5)) * VS_to_WS;
 
-				Ray new_ray_0;
-				vec3 normal_0 = data.normal.xyz + random_direction(position_WS) * get_roughness();
-				new_ray_0.direction = normalize(reflect(ray.direction, normal_0));
-				new_ray_0.origin = ((vec3(voxel) + vec3(0.5, 0.5, 0.5)) * VS_to_WS + normal_offset * LS_to_WS * new_ray_0.direction);
-				new_ray_0.inverse_direction = 1.0 / new_ray_0.direction;
+				float roughness = get_roughness();
+				// float specular_strength = get_specular_strength();
+
+				Ray bounce_ray_0;
+				vec3 normal_0 = normalize(data.normal.xyz + random_direction(position_WS) * roughness);
+				bounce_ray_0.direction = normalize(reflect(ray.direction, normal_0));
+				bounce_ray_0.origin = voxel_center_WS + normal_offset * LS_to_WS * bounce_ray_0.direction;
+				// bounce_ray_0.inverse_direction = 1.0 / bounce_ray_0.direction;
 				
-				Ray new_ray_1;
-				vec3 normal_1 = data.normal.xyz + random_direction(position_WS.yzx) * get_roughness();
-				new_ray_1.direction = normalize(reflect(ray.direction, normal_1));
-				new_ray_1.origin = (vec3(voxel) * VS_to_WS + normal_offset * LS_to_WS * new_ray_1.direction);
-				new_ray_1.inverse_direction = 1.0 / new_ray_1.direction;
+				Ray bounce_ray_1;
+				vec3 normal_1 = normalize(data.normal.xyz + random_direction(position_WS.yzx) * roughness);
+				bounce_ray_1.direction = normalize(reflect(ray.direction, normal_1));
+				bounce_ray_1.origin = voxel_center_WS + normal_offset * LS_to_WS * bounce_ray_1.direction;
+				// bounce_ray_1.inverse_direction = 1.0 / bounce_ray_1.direction;
 				
-				Ray new_ray_2;
-				vec3 normal_2 = data.normal.xyz + random_direction(position_WS.zxy) * get_roughness();
-				new_ray_2.direction = normalize(reflect(ray.direction, normal_2));
-				new_ray_2.origin = (vec3(voxel) * VS_to_WS + normal_offset * LS_to_WS * new_ray_2.direction);
-				new_ray_2.inverse_direction = 1.0 / new_ray_2.direction;
+				Ray bounce_ray_2;
+				vec3 normal_2 = normalize(data.normal.xyz + random_direction(position_WS.zxy) * roughness);
+				bounce_ray_2.direction = normalize(reflect(ray.direction, normal_2));
+				bounce_ray_2.origin = voxel_center_WS + normal_offset * LS_to_WS * bounce_ray_2.direction;
+				// bounce_ray_2.inverse_direction = 1.0 / bounce_ray_2.direction;
 
 				vec3 direct_diffuse = max(0, dot(-lighting.direct_direction.xyz, data.normal.xyz)) * lighting.direct_color.rgb;
-				vec3 gi_specular_0 = traverse_octree_lights(new_ray_0, get_bounce_ray_length()).rgb;
-				vec3 gi_specular_1 = traverse_octree_lights(new_ray_1, get_bounce_ray_length()).rgb;
-				vec3 gi_specular_2 = traverse_octree_lights(new_ray_2, get_bounce_ray_length()).rgb;
+				vec3 gi_specular_0 = traverse_octree_lights(bounce_ray_0, get_bounce_ray_length()).rgb;
+				vec3 gi_specular_1 = traverse_octree_lights(bounce_ray_1, get_bounce_ray_length()).rgb;
+				vec3 gi_specular_2 = traverse_octree_lights(bounce_ray_2, get_bounce_ray_length()).rgb;
 				vec3 gi_specular = (gi_specular_0 + gi_specular_1 + gi_specular_2) / 3;
 
 				vec3 light = direct_diffuse + gi_specular;
 				float alpha = 1.0 - ((t_WS + t_start) / max_distance);
 				color = vec4(data.color.xyz * light, alpha);
 			}
-			else if (get_draw_mode() == DRAW_MODE_NORMALS)
+			else if (draw_mode == DRAW_MODE_ALBEDO)
+			{
+				color = vec4(data.color.rgb, 1);
+			}
+			else if (draw_mode == DRAW_MODE_LITS)
 			{
 				color = vec4((data.normal.xyz + 1) / 2, 1);
 			}

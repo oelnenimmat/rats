@@ -82,3 +82,7 @@ TTo & unsafe_cast(TTFrom & from)
 	return * reinterpret_cast<TTo*>(&from);
 }
 
+// https://en.wikipedia.org/wiki/Kilobyte
+constexpr size_t kibibytes(size_t n) { return n * 1024; }
+constexpr size_t mebibytes(size_t n) { return kibibytes(n) * 1024; }
+constexpr size_t gibibytes(size_t n) { return mebibytes(n) * 1024; }

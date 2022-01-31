@@ -1,3 +1,5 @@
+#include "VoxelRenderer.hpp"
+
 #include "engine.hpp"
 
 #include "File.hpp"
@@ -7,6 +9,7 @@
 #include "Time.hpp"
 #include "InputSettings.hpp"
 #include "Stopwatch.hpp"
+#include "Statistics.hpp"
 
 #include "gui.hpp"
 #include "memory.hpp"
@@ -23,6 +26,8 @@
 #include "WorldSettings.hpp"
 #include "Mouse.hpp"
 #include "Octree.hpp"
+
+#include "world_generator.hpp"
 
 struct CameraData
 {
@@ -56,6 +61,9 @@ static void shutdown_engine(Engine&);
 
 void run_engine(Window * window, Graphics * graphics, Input * input)
 {
+	// void run_experiments();
+	// run_experiments();
+
 	Engine engine{};
 	initialize_engine(engine, graphics, window, input);
 
@@ -65,11 +73,11 @@ void run_engine(Window * window, Graphics * graphics, Input * input)
 
 	while(engine.running)
 	{	
-		begin_frame(engine);
-		engine_gui(engine);
-		update_engine(engine);
-		render_engine(engine);
-		end_frame(engine);
+		TIME_FUNCTION(begin_frame(engine), engine.timings.begin_frame);
+		TIME_FUNCTION(engine_gui(engine), engine.timings.engine_gui);
+		TIME_FUNCTION(update_engine(engine), engine.timings.update_engine);
+		TIME_FUNCTION(render_engine(engine), engine.timings.render_engine);
+		TIME_FUNCTION(end_frame(engine), engine.timings.end_frame);
 	}
 
 	shutdown_engine(engine);
@@ -103,13 +111,13 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 	// -----------------------------------------------------------------
 	// Memory
 
-	size_t temp_memory_size = 128 * 1024 * 1024;
+	size_t temp_memory_size = gibibytes(1);
 	engine.temp_allocator = ArenaAllocator(temp_memory_size, platform_memory_allocate(temp_memory_size));
 	
-	size_t persistent_memory_size = 128 * 1024 * 1024;
+	size_t persistent_memory_size = mebibytes(128);
 	engine.persistent_allocator = ArenaAllocator(persistent_memory_size, platform_memory_allocate(persistent_memory_size));
 
-	size_t voxel_memory_size = 128 * 1024 * 1024;
+	size_t voxel_memory_size = gibibytes(1);
 	engine.voxel_allocator = ArenaAllocator(voxel_memory_size, platform_memory_allocate(voxel_memory_size));
 
 	engine.running = true;
@@ -123,6 +131,9 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 	// -----------------------------------------------------------------
 
 	// Game systems
+	// Todo(Leo): some of init functions are free functions, some are member. decide  which one is
+	// better and use it everywhere
+	init(engine.renderer, &engine.world_settings, &engine.draw_options);
 	engine.debug_terrain.init(engine.debug_terrain_settings);
 	engine.grass.init(engine.grass_settings, global_debug_allocator, engine.debug_terrain);
 
@@ -149,18 +160,16 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 
 	// -------------------------------------------------------------------------------------------------
 
-	int octree_depth = engine.world_settings.octree_depth;
-	engine.octree.init(octree_depth, engine.voxel_allocator);
-	do_octree_test(
-		engine.octree,
-		engine.world_settings.octree_depth,
+	engine.renderer.octree.init(engine.draw_options.voxel_settings.draw_octree_depth, engine.voxel_allocator);
+	generate_test_world(
+		engine.renderer,
 		engine.debug_terrain,
 		engine.noise_settings,
 		engine.world_settings,
-		engine.world_settings.colors
+		engine.draw_options
 	);
 
-	engine.octree_buffer_handle 		= graphics_create_buffer(graphics, engine.octree.nodes.memory_size(), GraphicsBufferType::compute);
+	engine.octree_buffer_handle 		= graphics_create_buffer(graphics, engine.renderer.octree.nodes.memory_size(), GraphicsBufferType::compute);
 	engine.octree_info_buffer_handle 	= graphics_create_buffer(graphics, sizeof(OctreeInfo), GraphicsBufferType::uniform);
 	engine.camera_buffer_handle 		= graphics_create_buffer(graphics, sizeof(CameraData), GraphicsBufferType::uniform);
 	engine.lighting_buffer_handle 		= graphics_create_buffer(graphics, sizeof(LightData), GraphicsBufferType::uniform);
@@ -183,20 +192,22 @@ void update_engine(Engine & engine)
 	if (engine.events.recreate_world)
 	{
 		engine.voxel_allocator.reset();
-		engine.octree.dispose();
-		engine.octree.init(engine.world_settings.octree_depth, engine.voxel_allocator);
+		engine.renderer.octree.dispose();
+		engine.renderer.octree.init(
+			engine.draw_options.voxel_settings.draw_octree_depth,
+			engine.voxel_allocator
+		);
 
 		graphics_destroy_buffer(graphics, engine.octree_buffer_handle);
-		engine.octree_buffer_handle = graphics_create_buffer(graphics, engine.octree.nodes.memory_size(), GraphicsBufferType::compute);
+		engine.octree_buffer_handle = graphics_create_buffer(graphics, engine.renderer.octree.nodes.memory_size(), GraphicsBufferType::compute);
 		graphics_bind_buffer(graphics, engine.octree_buffer_handle, voxel_octree_buffer, GraphicsBufferType::compute);
 
-		do_octree_test(
-			engine.octree,
-			engine.world_settings.octree_depth,
+		generate_test_world(
+			engine.renderer,
 			engine.debug_terrain,
 			engine.noise_settings,
 			engine.world_settings,
-			engine.world_settings.colors
+			engine.draw_options
 		);
 	}
 
@@ -242,7 +253,6 @@ void update_engine(Engine & engine)
 
 	// ------------------------------------------------------------------------
 	// game systems update
-
 
 	JobQueue jobs(engine.temp_allocator, 2);
 
@@ -318,83 +328,97 @@ void render_engine(Engine & engine)
 {
 	auto graphics = engine.graphics;
 
-	TIMER_BEGIN(front_buffer_write);
+	TIMER_BEGIN(draw_to_octree);
 
-	float3 world_size = float3(engine.world_settings.world_size);
-
-	Octree temp_octree;
-	temp_octree.init(engine.world_settings.octree_depth, engine.temp_allocator);
-
-	if (engine.paused == false)
-	{
-		// temp_octree.clear();
-		size_t octree_memory_size = sizeof(OctreeNode) * engine.octree.used_node_count;
-		temp_octree.used_node_count = engine.octree.used_node_count;
-		memcpy(temp_octree.nodes.get_memory_ptr(), engine.octree.nodes.get_memory_ptr(), octree_memory_size);
-
-		draw_cuboid(
-			engine.character.position,
-			temp_octree,
-			engine.voxel_settings.character_octree_depth,
-			engine.character.size,
-			engine.character.color,
-			world_size
-		);
-
-		for (MouseState const & mouse : engine.mouses)
+		if (engine.paused == false)
 		{
-			draw_mouse(
-				mouse.position,
-				temp_octree,
-				engine.voxel_settings.rat_octree_depth,
-				engine.mouse_colors.evaluate(mouse.hash.get_float_A_01()).rgb,
-				world_size
+			prepare_frame(engine.renderer, engine.temp_allocator);
+
+			draw_cuboid(
+				engine.renderer,
+				engine.character.position,
+				engine.draw_options.voxel_settings.character_octree_depth,
+				engine.character.size,
+				engine.character.color
 			);
+
+			for (MouseState const & mouse : engine.mouses)
+			{
+				draw_cuboid(
+					engine.renderer,
+					mouse.position,
+					engine.draw_options.voxel_settings.rat_octree_depth,
+					0.125,
+					engine.mouse_colors.evaluate(mouse.hash.get_float_A_01()).rgb
+				);
+			}
+
+			float3 world_size = float3(engine.world_settings.world_size);
+			draw_grass(engine.grass, engine.renderer.temp_octree, world_size);
 		}
 
-		draw_grass(engine.grass, temp_octree, world_size);
-	}
+	TIMER_END(engine.timings, draw_to_octree);
 
-	TIMER_END(engine.timings, front_buffer_write);
 
-	// issue rendering
-	graphics_begin_frame(graphics);
+	TIMER_BEGIN(setup_draw_buffers);
 
-	size_t octree_memory_size = sizeof(OctreeNode) * temp_octree.used_node_count;
+		OctreeInfo octree_info = {};
+		octree_info.max_depth() = engine.draw_options.voxel_settings.draw_octree_depth;
+		octree_info.world_min.xyz = float3(0,0,0);
+		octree_info.world_max.xyz = float3(engine.world_settings.world_size, engine.world_settings.world_size, engine.world_settings.world_size);
 
-	OctreeInfo octree_info = {};
-	octree_info.max_depth() = engine.voxel_settings.draw_octree_depth;
-	octree_info.world_min.xyz = float3(0,0,0);
-	octree_info.world_max.xyz = float3(engine.world_settings.world_size, engine.world_settings.world_size, engine.world_settings.world_size);
+		LightData light_data = engine.light_settings.get_light_data();
+		
+		CameraData camera_data;
+		camera_data.view_matrix = engine.camera_mode == CameraMode::editor ? engine.camera.view_matrix : engine.game_camera.view_matrix; 
+		camera_data.max_distance = float4(
+			engine.game_camera.max_distance,
+			engine.game_camera.field_of_view,
+			0,
+			0
+		);
+		camera_data.world_size = float4(
+			engine.world_settings.world_size,
+			0,
+			0,
+			0
+		);
+		camera_data.draw_options = engine.draw_options.get_gpu_data();
 
-	LightData light_data = engine.light_settings.get_light_data();
-	
-	CameraData camera_data;
-	camera_data.view_matrix = engine.camera_mode == CameraMode::editor ? engine.camera.view_matrix : engine.game_camera.view_matrix; 
-	camera_data.max_distance = float4(
-		engine.game_camera.max_distance,
-		engine.game_camera.field_of_view,
-		0,
-		0
-	);
-	camera_data.world_size = float4(
-		engine.world_settings.world_size,
-		0,
-		0,
-		0
-	);
-	camera_data.draw_options = engine.draw_options.get_gpu_data();
+	TIMER_END(engine.timings, setup_draw_buffers);
 
-	TIMER_BEGIN(front_buffer_copy);
+	// This must be called before any graphics calls, so that virtual frame index is advanced properly
+	TIME_FUNCTION(graphics_begin_frame(graphics), engine.timings.graphics_begin_frame);
 
-	graphics_write_buffer(graphics, engine.octree_buffer_handle, octree_memory_size, temp_octree.nodes.get_memory_ptr());
-	graphics_write_buffer(graphics, engine.octree_info_buffer_handle, sizeof octree_info, &octree_info);
-	graphics_write_buffer(graphics, engine.camera_buffer_handle,	sizeof camera_data, &camera_data);
-	graphics_write_buffer(graphics, engine.lighting_buffer_handle, sizeof light_data, &light_data);
+	TIMER_BEGIN(copy_to_graphics);
 
-	TIMER_END(engine.timings, front_buffer_copy);
+		if (engine.draw_options.draw_method == ComputeShaderDrawMethod::octree)
+		{
+			size_t octree_memory_size = sizeof(OctreeNode) * engine.renderer.temp_octree._used_node_count;
+			graphics_write_buffer(graphics, engine.octree_buffer_handle, octree_memory_size, engine.renderer.temp_octree.nodes.get_memory_ptr());
+		}
+		else if (engine.draw_options.draw_method == ComputeShaderDrawMethod::chunktree)
+		{
+			size_t chunk_map_memory_size = engine.renderer.chunk_map.nodes.memory_size();
+			graphics_write_buffer(graphics, engine.octree_buffer_handle, chunk_map_memory_size, engine.renderer.chunk_map.nodes.get_memory_ptr());
+		}	
 
-	graphics_draw_frame(graphics);
+		graphics_write_buffer(graphics, engine.octree_info_buffer_handle, sizeof octree_info, &octree_info);
+		graphics_write_buffer(graphics, engine.camera_buffer_handle, sizeof camera_data, &camera_data);
+		graphics_write_buffer(graphics, engine.lighting_buffer_handle, sizeof light_data, &light_data);
+
+	TIMER_END(engine.timings, copy_to_graphics);
+
+	TIME_FUNCTION(graphics_draw_frame(graphics), engine.timings.graphics_draw_frame);
+
+	GraphicsTiming graphics_timing = graphics_get_timing(graphics);
+
+	engine.timings.graphics_acquire_image.put(graphics_timing.acquire_image);
+	engine.timings.graphics_run_compute.put(graphics_timing.run_compute);
+	engine.timings.graphics_blit.put(graphics_timing.blit);
+	engine.timings.graphics_imgui.put(graphics_timing.imgui);
+	engine.timings.graphics_submit.put(graphics_timing.submit);
+	engine.timings.graphics_present.put(graphics_timing.present);
 
 	// Todo(Leo): graphics will just crash if something goes wrong, but eventually
 	// it will have to try to recover
@@ -403,7 +427,6 @@ void render_engine(Engine & engine)
 	// 	std::cout << "Graphics bad, go away\n";
 	// 	running = false;
 	// }
-
 }
 
 void shutdown_engine(Engine & engine)
@@ -459,14 +482,14 @@ namespace gui
 {
 	void display(char const * label, ArenaAllocator const & a)
 	{
-		auto as_megabytes = [](size_t bytes)
+		auto as_mebibytes = [](size_t bytes)
 		{
 			return static_cast<float>(bytes / 1024) / 1024.0f;
 		};
 
 		Text("%s", label);
-		Value("Used", as_megabytes(a.used()), "%.2f MB");
-		Value("Capacity", as_megabytes(a.capacity()), "%.2f MB");
+		Value("Used", as_mebibytes(a.used()), "%.2f MiB");
+		Value("Capacity", as_mebibytes(a.capacity()), "%.2f MiB");
 	}
 }
 
@@ -526,11 +549,18 @@ void engine_gui(Engine & engine)
 		collapsing_box("Editor Camera", engine.camera);
 		collapsing_box("Game Camera", engine.game_camera);
 		collapsing_box("Character", engine.character);
-		collapsing_box("Voxel Settings", engine.voxel_settings);
 		collapsing_box("Debug Lighting", engine.light_settings);
-		collapsing_box("World Settings", engine.world_settings);
+		if (collapsing_box("World Settings", engine.world_settings))
+		{
+			engine.events.recreate_world = true;
+		}
+
 		collapsing_box("Grass", engine.grass);
-		collapsing_box("Draw Options", engine.draw_options);
+		if (collapsing_box("Draw Options", engine.draw_options))
+		{
+			// engine.events.recreate_world = true;
+		}
+
 		if (collapsing_box("Terrain", engine.debug_terrain_settings))
 		{
 			engine.debug_terrain.refresh();
@@ -547,6 +577,12 @@ void engine_gui(Engine & engine)
 		}
 
 		edit("Mouse Colors", engine.mouse_colors);
+
+
+		edit("Debug Voxel x", engine.debug_voxel.x);
+		edit("Debug Voxel y", engine.debug_voxel.y);
+		edit("Debug Voxel z", engine.debug_voxel.z);
+		edit("Debug Voxel w", engine.debug_voxel.w);
 
 		if (ImGui::Button("Open Imgui Demo"))
 		{
@@ -584,5 +620,4 @@ void engine_gui(Engine & engine)
 
 		ImGui::End();
 	}
-
 }

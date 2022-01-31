@@ -116,6 +116,14 @@ inline DESERIALIZE_STRUCT(int4 & v)
 	serializer.read("w", v.w);
 }
 
+#include <iostream>
+#define STD_OSTREAM_OPERATOR(target) std::ostream & operator << (std::ostream & os, target)
+
+inline STD_OSTREAM_OPERATOR(float3 const & v)
+{ 
+	return os << "(" << v.x << "," << v.y << "," << v.z << ")";
+}
+
 // Sketch on how to implement swizzles if we want to
 // union vec2
 // {

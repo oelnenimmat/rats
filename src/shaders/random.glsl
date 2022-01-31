@@ -54,13 +54,21 @@ float random( vec2  v ) { return floatConstruct(hash(floatBitsToUint(v))); }
 float random( vec3  v ) { return floatConstruct(hash(floatBitsToUint(v))); }
 float random( vec4  v ) { return floatConstruct(hash(floatBitsToUint(v))); }
 
+vec3 random_vec3_in_unit_cube( vec3 v )
+{
+    return vec3(
+        floatConstruct(hash(floatBitsToUint(v.xyz))),
+        floatConstruct(hash(floatBitsToUint(v.yzx))),
+        floatConstruct(hash(floatBitsToUint(v.zxy)))
+    );
+}
+
 vec3 random_direction( vec3 v)
 {
-    return normalize(vec3(
-        floatConstruct(hash(floatBitsToUint(v.xyz))) - 0.5,
-        floatConstruct(hash(floatBitsToUint(v.yzx))) - 0.5,
-        floatConstruct(hash(floatBitsToUint(v.zxy))) - 0.5
-    ));
+    // https://stackoverflow.com/questions/38112526/why-do-people-use-sqrtdotdistancevector-distancevector-over-opengls-distan
+    // this returns somehting from normalized cube, which is problematic, but that is best i have right now
+    // since i do not know how to get actual random in gpu
+    return normalize(random_vec3_in_unit_cube(v) - 0.5);
 }
 
 

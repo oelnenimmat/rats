@@ -1,4 +1,9 @@
 /*
+This file is intended to included multiple times with different #definitions for:
+	SCALAR 		scalar type of vector, e.g. float
+	DIMENSION	number of components in vector, e.g. 3
+	VECTOR 		name of vector type, e.g. float3
+
 Operations are implemented as loops in hope that:
 	- compiler will auto vectorize
 	- unroll
@@ -8,11 +13,20 @@ wherever possible
 This may require compiler switches.
 https://clang.llvm.org/docs/AttributeReference.html#pragma-unroll-pragma-nounroll
 
-
 Currently (1/22) this works fast enough, we are bound by gpu performance anyway right now
 
 Functions that return VECTOR by value, usually take first argument by value, modifies it
 and returns it. This apparently enables somthing related to copy elision. [Source???]
+
+Todo:
+	- std min, max, floor etc. are used here. think and teste through whether or not
+		that is a good idea
+	- test: not all of these functions are used, and therefore not under everyday testing
+		all of these are probably eventually needed, so they should be somehow automatically
+		tested.
+
+Some functions are implemented here, but not used anywhere so they are commented out
+
 */
 
 // Unary Operators ------------------------------------------------------------
@@ -149,7 +163,8 @@ inline VECTOR operator / (VECTOR v, SCALAR s)
 // FUNCTIONS 
 // ----------------------------------------------------------------------------
 
-#include <cmath>
+#include <cmath> // floor, sqrt, ceil(?)
+#include <algorithm> // min, max
 
 inline SCALAR dot(VECTOR const & a, VECTOR const & b)
 {
@@ -212,19 +227,6 @@ inline VECTOR clamp(VECTOR v, VECTOR const & min, VECTOR const & max)
 	return v;
 }
 
-/*
-inline VECTOR clamp(VECTOR v, VECTOR const & min, VECTOR const & max)
-{
-	OPERATE(
-		v.x = v.x < min.x ? min.x : v.x > max.x ? max.x : v.x,
-		v.y = v.y < min.y ? min.y : v.y > max.y ? max.y : v.y,
-		v.z = v.z < min.z ? min.z : v.z > max.z ? max.z : v.z,
-		v.w = v.w < min.w ? min.w : v.w > max.w ? max.w : v.w
-	)
-	return v;
-}
-*/
-
 inline VECTOR floor (VECTOR v)
 {
 	for (int i = 0; i < DIMENSION; i++)
@@ -238,12 +240,10 @@ inline VECTOR floor (VECTOR v)
 Not needed anywhere yet, lets see if we ever do
 inline VECTOR ceil (VECTOR v)
 {
-	OPERATE(
-		v.x = ceil(v.x),
-		v.y = ceil(v.y),
-		v.z = ceil(v.z),
-		v.w = ceil(v.w)
-	)
+	for (int i = 0; i < DIMENSION; i++)
+	{
+		v.values[i] = std::ceil(v.values[i]);
+	}
 	return v;
 }
 */
@@ -251,4 +251,41 @@ inline VECTOR reflect(VECTOR v, VECTOR const & normal)
 {
 	v = v - normal * 2 * dot(v, normal);
 	return v;
+}
+
+/*
+inline VECTOR min(VECTOR v, SCALAR s)
+{
+	for (int i = 0; i < DIMENSION; i++)
+	{
+		v.values[i] = std::min(v.values[i], s);
+	}
+	return v;
+}
+
+inline VECTOR min(VECTOR a, VECTOR const & b)
+{
+	for (int i = 0; i < DIMENSION; i++)
+	{
+		a.values[i] = std::min(a.values[i], b.values[i]);
+	}
+	return a;
+}
+*/
+inline VECTOR max(VECTOR v, SCALAR s)
+{
+	for (int i = 0; i < DIMENSION; i++)
+	{
+		v.values[i] = std::max(v.values[i], s);
+	}
+	return v;
+}
+
+inline VECTOR max(VECTOR a, VECTOR const & b)
+{
+	for (int i = 0; i < DIMENSION; i++)
+	{
+		a.values[i] = std::max(a.values[i], b.values[i]);
+	}
+	return a;
 }

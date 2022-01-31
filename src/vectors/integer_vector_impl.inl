@@ -9,6 +9,7 @@ inline VECTOR & operator %= (VECTOR & v, int s)
 
 inline VECTOR operator % (VECTOR v, int s) { return v %= s; }
 
+/*
 inline VECTOR & operator %= (VECTOR & a, VECTOR const & b)
 {
 	for (int i = 0; i < DIMENSION; i++)
@@ -19,3 +20,4 @@ inline VECTOR & operator %= (VECTOR & a, VECTOR const & b)
 }
 
 inline VECTOR operator % (VECTOR a, VECTOR b) { return a %= b; }
+*/

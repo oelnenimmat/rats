@@ -22,6 +22,8 @@ struct Input;
 #include "DebugTerrain.hpp"
 #include "DrawOptions.hpp"
 
+#include "VoxelRenderer.hpp"
+
 enum struct CameraMode { editor, game };
 
 struct Engine
@@ -52,7 +54,6 @@ struct Engine
 	GameCamera game_camera = {};
 
 	NoiseSettings noise_settings = {};
-	VoxelSettings voxel_settings = {};
 	LightSettings light_settings = {};
 	DebugTerrainSettings debug_terrain_settings = {};
 
@@ -60,18 +61,21 @@ struct Engine
 	WorldSettings world_settings = {};
 
 	// System??
+	VoxelRenderer renderer = {};
+
+	// Scenery
 	GrassSystem grass = {};
 	DebugTerrain debug_terrain = {};
 
 	CameraMode camera_mode;
 	Character character = { float3(5,5,5), 3.0f };	
 
+	int4 debug_voxel = int4(15, 15, 15, 4);
+
 	struct
 	{
 		bool recreate_world;
 	} events;
-
-	Octree octree;
 
 	MouseState mouses [200] = {};
 	Gradient mouse_colors;
@@ -81,7 +85,7 @@ struct Engine
 	int camera_buffer_handle;
 	int lighting_buffer_handle;
 
-	static constexpr char const * save_filenme = "data/engine_2.json";
+	static constexpr char const * save_filenme = "data/engine.json";
 	static constexpr char const * style_filename = "data/imgui_style.json";;
 };
 
@@ -92,7 +96,6 @@ inline SERIALIZE_STRUCT(Engine const & engine)
 	serializer.write("character", engine.character);
 	serializer.write("input_settings", engine.input_settings);
 	serializer.write("noise_settings", engine.noise_settings);
-	serializer.write("voxel_settings", engine.voxel_settings);
 	serializer.write("light_settings", engine.light_settings);
 	serializer.write("grass_settings", engine.grass_settings);
 	serializer.write("world_settings", engine.world_settings);
@@ -108,7 +111,6 @@ inline DESERIALIZE_STRUCT(Engine & engine)
 	serializer.read("character", engine.character);
 	serializer.read("input_settings", engine.input_settings);
 	serializer.read("noise_settings", engine.noise_settings);
-	serializer.read("voxel_settings", engine.voxel_settings);
 	serializer.read("light_settings", engine.light_settings);
 	serializer.read("grass_settings", engine.grass_settings);
 	serializer.read("world_settings", engine.world_settings);

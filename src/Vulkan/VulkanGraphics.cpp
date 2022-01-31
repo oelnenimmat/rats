@@ -16,7 +16,7 @@
 #include "../vectors.hpp"
 
 // Todo(Leo) this is only that we don't have to deal with order of definitions right now
-#define USE_SOMETHING_ELSE_VIRTUAL_FRAME_COUNT 3
+#define USE_SOMETHING_ELSE_VIRTUAL_FRAME_COUNT 2
 
 struct ComputeBuffer
 {
@@ -25,6 +25,15 @@ struct ComputeBuffer
 	VkDevice device;
 	VkDeviceMemory memory;
 	VkBuffer buffer;
+
+	bool use_staging_buffer;
+	bool needs_to_apply = false;
+	size_t apply_size;
+	size_t apply_offset;
+
+	VkDeviceMemory staging_memory;
+	VkBuffer staging_buffer;
+	void * mapped_staging_memory;
 
 	size_t size;
 	size_t single_buffer_memory_size;
@@ -125,6 +134,7 @@ struct Graphics
 
 	// -----------------------------------------------------
 
+	GraphicsTiming timing;
 
 	struct RenderTarget
 	{
@@ -322,6 +332,7 @@ void graphics_begin_frame(Graphics * g)
 
 	VirtualFrame const & frame = get_current_frame(g);
 
+	// Wait for available frame resources
 	vkWaitForFences(g->device, 1, &frame.in_use_fence, VK_TRUE, 0xFFFFFFFFu);
 
 	auto cmd = frame.command_buffer;
@@ -333,38 +344,26 @@ void graphics_begin_frame(Graphics * g)
 
 	// Todo(Leo): I feel that there are better things to do here, as in "if this fails, try to recover"
 	VULKAN_HANDLE_ERROR(vkBeginCommandBuffer(cmd, &begin_info));
+}
 
-	// ---------------------------------------------------------------
-	
+#include "../Stopwatch.hpp"
 
-	// auto render_pass_info = vk_render_pass_begin_info();
-	// render_pass_info.renderPass = g->render_pass;
-
-	// render_pass_info.framebuffer = frame.framebuffer;
-
-	// render_pass_info.renderArea.offset = {0, 0};
-	// render_pass_info.renderArea.extent = {g->render_target_width, g->render_target_height};
-
-	// VkClearValue clear;
-	// clear.color.float32[0] = 0.0f;
-	// clear.color.float32[1] = 0.0f;
-	// clear.color.float32[2] = 0.0f;
-	// clear.color.float32[3] = 1.0f;
-	// render_pass_info.clearValueCount = 1;
-	// render_pass_info.pClearValues = &clear;
-
-	// vkCmdBeginRenderPass(cmd, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
-	// imgui_begin_frame(g);
-
+GraphicsTiming graphics_get_timing(Graphics * context)
+{
+	return context->timing;
 }
 
 void graphics_draw_frame(Graphics * context)
 {
+	#define BEGIN_TIMER(name) auto sw_##name = Stopwatch::start_new()
+	#define END_TIMER(name) context->timing.name = sw_##name.elapsed_milliseconds()
+
 	if (window_is_minimized(context->window))
 	{
 		return;
 	}
 
+	BEGIN_TIMER(acquire_image);
 
 	VirtualFrame const & frame = get_current_frame(context);
 	// uint32_t image_index = context->current_image_index;
@@ -392,13 +391,44 @@ void graphics_draw_frame(Graphics * context)
 		return;
 	}
 
+	END_TIMER(acquire_image);
+
 	// ---------------------------------------------------------------
 
 	auto cmd = frame.command_buffer;
 
+
+
 	// vkCmdEndRenderPass(cmd);
+	// ------------------------------------------------------
+
+	context->per_frame_buffer_pool.for_each([cmd](ComputeBuffer & buffer)
+	{
+		if(buffer.created && buffer.needs_to_apply)
+		{
+
+		// Todo: this bad, this calls vkDeviceWaitIdle in middle of render loop
+		// move this copy to actual command buffer
+		// auto cmd = begin_single_use_command_buffer(context);
+			VkBufferCopy copy =
+			{
+				0,
+				buffer.apply_offset,
+				buffer.apply_size
+			};
+			vkCmdCopyBuffer(cmd, buffer.staging_buffer, buffer.buffer, 1, &copy);
+		// execute_single_use_command_buffer(context, cmd);
+
+			buffer.needs_to_apply = false;
+			buffer.apply_offset = 0;
+			buffer.apply_size = 0;
+		}
+	});
+
 
 	// ------------------------------------------------------
+
+	BEGIN_TIMER(run_compute);
 
 	cmd_transition_image_layout(
 		cmd,
@@ -426,6 +456,10 @@ void graphics_draw_frame(Graphics * context)
 	);
 
 	vkCmdDispatch(cmd, context->render_target_width, context->render_target_height, 1);
+
+	END_TIMER(run_compute);
+
+	BEGIN_TIMER(blit);
 
 	cmd_transition_image_layout(
 		cmd,
@@ -476,6 +510,7 @@ void graphics_draw_frame(Graphics * context)
 		context->swapchain_images[image_index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		1, &blit, VK_FILTER_LINEAR);
 
+	END_TIMER(blit);
 
 	// cmd_transition_image_layout(
 	// 	cmd,
@@ -484,9 +519,15 @@ void graphics_draw_frame(Graphics * context)
 	// 	context->swapchain_images[image_index]
 	// );
 
+	BEGIN_TIMER(imgui);
+
 	// Todo(Leo): imgui render pass now does the above layout transition, it probably is not good idea.
 	// since it quite hidden and also super important
 	imgui_render_frame(context);
+
+	END_TIMER(imgui);
+
+	BEGIN_TIMER(submit);
 
 	VULKAN_HANDLE_ERROR(vkEndCommandBuffer(cmd));
 
@@ -507,25 +548,33 @@ void graphics_draw_frame(Graphics * context)
 	vkResetFences(context->device, 1, &frame.in_use_fence);
 
 	VULKAN_HANDLE_ERROR(vkQueueSubmit(context->graphics_queue, 1, &submit_info, frame.in_use_fence));
+	
+	END_TIMER(submit);
 
-	auto present_info = vk_present_info_KHR();
-	present_info.waitSemaphoreCount = 1;
-	present_info.pWaitSemaphores = &frame.rendering_finished_semaphore;
-	present_info.swapchainCount = 1;
-	present_info.pSwapchains = &context->swapchain;
-	present_info.pImageIndices = &image_index;
 
-	VkResult present_result = vkQueuePresentKHR(context->present_queue, &present_info);
+		auto present_info = vk_present_info_KHR();
+		present_info.waitSemaphoreCount = 1;
+		present_info.pWaitSemaphores = &frame.rendering_finished_semaphore;
+		present_info.swapchainCount = 1;
+		present_info.pSwapchains = &context->swapchain;
+		present_info.pImageIndices = &image_index;
 
-	if (present_result == VK_ERROR_OUT_OF_DATE_KHR || present_result == VK_SUBOPTIMAL_KHR || window_resized(context->window))
-	{
-		recreate_swapchain(context);
-	}
-	else if (present_result != VK_SUCCESS)
-	{
-		VULKAN_UNHANDLED_ERROR("Failed to present a swapchain image");
-		return;
-	}
+	BEGIN_TIMER(present);
+
+		VkResult present_result = vkQueuePresentKHR(context->present_queue, &present_info);
+		
+	END_TIMER(present);
+
+		if (present_result == VK_ERROR_OUT_OF_DATE_KHR || present_result == VK_SUBOPTIMAL_KHR || window_resized(context->window))
+		{
+			recreate_swapchain(context);
+		}
+		else if (present_result != VK_SUCCESS)
+		{
+			VULKAN_UNHANDLED_ERROR("Failed to present a swapchain image");
+			return;
+		}
+
 
 	context->current_frame_index += 1;
 	context->current_frame_index %= context->virtual_frame_count;
@@ -560,7 +609,6 @@ void graphics_destroy_buffer(Graphics * context, int buffer_handle)
 {
 	MINIMA_ASSERT(context->per_frame_buffer_pool.is_in_use(buffer_handle));
 
-	// todo:performance
 	vkDeviceWaitIdle(context->device);
 
 	context->per_frame_buffer_pool[buffer_handle].destroy();
@@ -594,13 +642,26 @@ void graphics_write_buffer(Graphics * context, int buffer_handle, size_t size, v
 	MINIMA_ASSERT(context->per_frame_buffer_pool[buffer_handle].size >= size);
 	MINIMA_ASSERT(data != nullptr);
 
-	void * dst = context->per_frame_buffer_pool[buffer_handle].mapped_memories[context->current_frame_index];
-	memcpy(dst, data, size);
+	ComputeBuffer & buffer = context->per_frame_buffer_pool[buffer_handle];
+	if (buffer.use_staging_buffer)
+	{
+		void * dst = buffer.mapped_staging_memory;
+		memcpy(dst, data, size);
+
+		buffer.needs_to_apply = true;
+		buffer.apply_size = size;
+		buffer.apply_offset = buffer.single_buffer_memory_size * context->current_frame_index;
+	}
+	else
+	{
+		void * dst = buffer.mapped_memories[context->current_frame_index];
+		memcpy(dst, data, size);
+	}
 }
 
 namespace
 {
-	VkResult create_buffer(VkDevice device, size_t size, VkBufferUsageFlagBits usage, VkBuffer * out_buffer)
+	VkResult create_buffer(VkDevice device, size_t size, VkBufferUsageFlags usage, VkBuffer * out_buffer)
 	{
 		auto buffer_info = vk_buffer_create_info();
 		buffer_info.size = size;
@@ -610,7 +671,7 @@ namespace
 		return vkCreateBuffer(device, &buffer_info, nullptr, out_buffer);
 	}
 
-	VkResult allocate_buffer_memory(Graphics const * context, VkBuffer buffer, VkDeviceMemory * out_memory)
+	VkResult allocate_buffer_memory(Graphics const * context, VkBuffer buffer, VkMemoryPropertyFlags properties, VkDeviceMemory * out_memory)
 	{
 		VkMemoryRequirements memory_requirements;
 		vkGetBufferMemoryRequirements(context->device, buffer, &memory_requirements);
@@ -620,11 +681,34 @@ namespace
 		allocate_info.memoryTypeIndex = find_memory_type(
 			context->physical_device, 
 			memory_requirements.memoryTypeBits, 
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+			properties
 		);
 
 		return vkAllocateMemory(context->device, &allocate_info, nullptr, out_memory);
 	}
+
+	VkBufferUsageFlags buffer_usage_from(GraphicsBufferType type)
+	{
+		switch(type)
+		{
+			case GraphicsBufferType::compute: return VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+			case GraphicsBufferType::uniform: return VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+		};
+
+		MINIMA_ASSERT(false);	
+	}
+
+	VkMemoryPropertyFlags memory_properties_from(GraphicsBufferType type)
+	{
+		switch(type)
+		{
+			case GraphicsBufferType::compute: return VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+			case GraphicsBufferType::uniform: return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+		};
+
+		MINIMA_ASSERT(false);
+	}
+
 }
 
 void ComputeBuffer::create(Graphics * context, size_t size, GraphicsBufferType type)
@@ -636,17 +720,32 @@ void ComputeBuffer::create(Graphics * context, size_t size, GraphicsBufferType t
 	size_t total_size = single_buffer_memory_size * context->virtual_frame_count;
 
 	VULKAN_HANDLE_ERROR(create_buffer(device, total_size, buffer_usage_from(type), &buffer));
-	VULKAN_HANDLE_ERROR(allocate_buffer_memory(context, buffer, &memory));
+	VULKAN_HANDLE_ERROR(allocate_buffer_memory(context, buffer, memory_properties_from(type), &memory));
 	VULKAN_HANDLE_ERROR(vkBindBufferMemory(device, buffer, memory, 0));
 
-	void * mapped_memory;
-	VULKAN_HANDLE_ERROR(vkMapMemory(device, memory, 0, VK_WHOLE_SIZE, 0, &mapped_memory));
 
-	for (int i = 0; i < context->virtual_frame_count; i++)
+	if (type == GraphicsBufferType::compute)
 	{
-		VkDeviceSize offset = i * single_buffer_memory_size;
-		buffer_offsets[i] = offset;
-		mapped_memories[i] = reinterpret_cast<uint8_t*>(mapped_memory) + offset;
+		use_staging_buffer = true;
+		// Create staging buffer
+		VULKAN_HANDLE_ERROR(create_buffer(device, single_buffer_memory_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &staging_buffer));
+		VULKAN_HANDLE_ERROR(allocate_buffer_memory(context, staging_buffer, memory_properties_from(GraphicsBufferType::uniform), &staging_memory));
+		VULKAN_HANDLE_ERROR(vkBindBufferMemory(device, staging_buffer, staging_memory, 0));
+		VULKAN_HANDLE_ERROR(vkMapMemory(device, staging_memory, 0, VK_WHOLE_SIZE, 0, &mapped_staging_memory));
+	}
+	else
+	{
+		use_staging_buffer = false;
+	
+		void * mapped_memory;
+		VULKAN_HANDLE_ERROR(vkMapMemory(device, memory, 0, VK_WHOLE_SIZE, 0, &mapped_memory));
+
+		for (int i = 0; i < context->virtual_frame_count; i++)
+		{
+			VkDeviceSize offset = i * single_buffer_memory_size;
+			buffer_offsets[i] = offset;
+			mapped_memories[i] = reinterpret_cast<uint8_t*>(mapped_memory) + offset;
+		}
 	}
 
 	this->size = size;
@@ -663,5 +762,26 @@ void ComputeBuffer::destroy()
 	vkFreeMemory(device, memory, nullptr);
 	vkDestroyBuffer(device, buffer, nullptr);
 
+	if (use_staging_buffer)
+	{
+		vkFreeMemory(device, staging_memory, nullptr);
+		vkDestroyBuffer(device, staging_buffer, nullptr);
+	}
+
 	*this = {};
+}
+
+void * graphics_buffer_get_writeable_memory(Graphics * context, int buffer_handle)
+{
+	MINIMA_ASSERT(context->per_frame_buffer_pool.is_in_use(buffer_handle));
+
+	ComputeBuffer & buffer = context->per_frame_buffer_pool[buffer_handle];
+	return buffer.mapped_memories[context->current_frame_index];
+
+	// todo: return staging buffer memory
+}
+
+void graphics_apply_buffer(Graphics * context, int buffer_handle)
+{
+	// todo: apply staging buffer
 }

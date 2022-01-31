@@ -72,9 +72,8 @@ namespace ImGui
 
 namespace gui
 {
-	bool edit(char const * label, Range & range, int flags)
+	bool edit(char const * label, Range & range, int flags = 0)
 	{
-
 		if (flags == RANGE_EDIT_MIN_AND_WIDTH)
 		{
 			float width = range.max - range.min;

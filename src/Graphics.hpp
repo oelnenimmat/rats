@@ -17,9 +17,21 @@ Graphics * create_graphics(Window const * window, Allocator * allocator);
 void destroy_graphics(Graphics * graphics, Allocator * same_allocator);
 // bool bad_graphics_is_cool(Graphics const * graphics);
 
+
+struct GraphicsTiming
+{
+	float acquire_image;
+	float run_compute;
+	float blit;
+	float imgui;
+	float submit;
+	float present;
+};
+
 // Interface for engine
 void graphics_begin_frame(Graphics*);
 void graphics_draw_frame(Graphics*);
+GraphicsTiming graphics_get_timing(Graphics * graphics);
 
 enum struct GraphicsBufferType
 {
@@ -37,6 +49,8 @@ struct GraphicsPipelineLayout
 int graphics_create_buffer(Graphics*, size_t size, GraphicsBufferType type);
 void graphics_destroy_buffer(Graphics*, int buffer_handle);
 bool graphics_bind_buffer(Graphics*, int buffer_handle, int index_in_shader, GraphicsBufferType type);
+void * graphics_buffer_get_writeable_memory(Graphics*, int buffer_handle);
+void graphics_apply_buffer(Graphics*, int buffer_handle);
 void graphics_write_buffer(Graphics*, int buffer_handle, size_t size, void * data);
 
 [[nodiscard]] bool graphics_create_compute_pipeline(Graphics*, GraphicsPipelineLayout*);

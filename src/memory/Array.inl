@@ -130,14 +130,21 @@ struct Array
 
 	void dispose()
 	{
-		MINIMA_ASSERT(_memory != nullptr);
-		MINIMA_ASSERT(_allocator != nullptr);
-		
-		_allocator->deallocate(_memory);
+		if (_memory != nullptr)
+		{
+			MINIMA_ASSERT(_allocator != nullptr);
 
-		_length = 0;
-		_memory = nullptr;
-		_allocator = nullptr;
+			_allocator->deallocate(_memory);
+
+			_length = 0;
+			_memory = nullptr;
+			_allocator = nullptr;
+		}
+
+		MINIMA_ASSERT(_length == 0);
+		MINIMA_ASSERT(_memory == nullptr);
+		MINIMA_ASSERT(_allocator == nullptr);
+		
 	}
 
 	T * get_memory_ptr()

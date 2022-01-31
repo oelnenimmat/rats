@@ -16,3 +16,4 @@ void for_xyz(int3 range, TFunc func)
 		}
 	}	
 }
+

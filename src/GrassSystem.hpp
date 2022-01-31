@@ -63,7 +63,7 @@ namespace gui
 	{
 		auto gui = gui_helper();
 		gui.edit("direction", s.direction);
-		gui.edit("length", s.length);
+		gui.edit("length", s.length, RANGE_EDIT_MIN_AND_WIDTH);
 		gui.edit("color", s.color);
 		gui.edit("depth", s.depth);
 		gui.edit("count", s.count);
@@ -224,11 +224,7 @@ void draw_grass(GrassSystem const & grass, Octree & octree, float3 world_size)
 		return;
 	}
 
-	float3 world_to_voxel = float3(int3(
-		1 << (grass.settings->depth),
-		1 << (grass.settings->depth),
-		1 << (grass.settings->depth)
-	)) / float3(10,10,10);
+	float3 world_to_voxel = float3(1 << (grass.settings->depth)) / world_size;
 
 	for (int i = 0; i < grass.roots.length(); i++)
 	{

@@ -67,17 +67,6 @@ namespace
 		MINIMA_ASSERT(false);
 	}
 
-	VkBufferUsageFlagBits buffer_usage_from(GraphicsBufferType type)
-	{
-		switch(type)
-		{
-			case GraphicsBufferType::compute: return VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-			case GraphicsBufferType::uniform: return VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-		};
-
-		MINIMA_ASSERT(false);	
-	}
-
 
 	void create_compute_pipeline(Graphics * context, GraphicsPipelineLayout * layout)
 	{	
