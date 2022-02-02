@@ -6,6 +6,7 @@ src/prebuild/prebuild.cpp ^
 -o prebuild.o ^
 -g -gcodeview ^
 -std=c++17 ^
+-fopenmp ^
 -O0 ^
 -D_CRT_SECURE_NO_WARNINGS ^
 -Werror ^

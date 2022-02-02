@@ -25,7 +25,6 @@
 #include "GrassSystem.hpp"
 #include "WorldSettings.hpp"
 #include "Mouse.hpp"
-#include "Octree.hpp"
 
 #include "world_generator.hpp"
 
@@ -210,8 +209,6 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 
 	// -------------------------------------------------------------------------------------------------
 
-	engine.renderer.octree.init(engine.draw_options.voxel_settings.draw_octree_depth, engine.voxel_allocator);
-	
 	int chunk_count = 16;
 	int voxel_count_in_chunk = 8;
 
@@ -222,7 +219,7 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 	size_t voxel_buffer_memory_size = total_element_count * sizeof(ChunkMapNode);
 
 	engine.octree_buffer_handle 		= graphics_create_buffer(graphics, voxel_buffer_memory_size, GraphicsBufferType::compute);
-	engine.octree_info_buffer_handle 	= graphics_create_buffer(graphics, sizeof(OctreeInfo), GraphicsBufferType::uniform);
+	engine.octree_info_buffer_handle 	= graphics_create_buffer(graphics, sizeof(VoxelWorldInfo), GraphicsBufferType::uniform);
 	engine.camera_buffer_handle 		= graphics_create_buffer(graphics, sizeof(CameraData), GraphicsBufferType::uniform);
 	engine.lighting_buffer_handle 		= graphics_create_buffer(graphics, sizeof(LightData), GraphicsBufferType::uniform);
 
@@ -329,7 +326,7 @@ void update_engine(Engine & engine)
 	// ------------------------------------------------------------------------
 	// game systems update
 
-	JobQueue jobs(engine.temp_allocator, 2);
+	JobQueue jobs(engine.temp_allocator, 100);
 
 	if (engine.camera_mode == CameraMode::editor)
 	{
@@ -353,12 +350,13 @@ void update_engine(Engine & engine)
 			game_camera_target_position
 		);
 
-		auto single_player_character_input = get_character_input(input, engine.game_camera, scaled_delta_time);
+		auto single_player_character_input = get_character_input(input, engine.game_camera);
 
 		auto character_update_job = CharacterUpdateJob
 		{
-			.characters 	= &engine.character,
-			.inputs 		= &single_player_character_input,
+			.characters 	= make_slice(1, &engine.character),
+			.inputs 		= make_slice(1, &single_player_character_input),
+
 			.terrain 		= &engine.debug_terrain,
 			.min_position 	= float3(0.5, 0.5, 0.5),
 			.max_position 	= float3(
@@ -366,6 +364,7 @@ void update_engine(Engine & engine)
 				engine.world_settings.world_size - 0.5f,
 				engine.world_settings.world_size - 0.5f
 			),
+			.delta_time 	= scaled_delta_time,
 		};
 		jobs.enqueue(character_update_job, 1);
 	}
@@ -384,11 +383,7 @@ void update_engine(Engine & engine)
 	};
 
 	jobs.enqueue_parallel(mouse_update_job, array_length(engine.mouses));
-
-
-	auto grass_update_job = get_grass_update_job(engine.grass, scaled_delta_time);
-	run_job(grass_update_job, grass_update_job.roots.length());
-	// jobs.enqueue_parallel(grass_update_job, grass_update_job.roots.length());
+	jobs.enqueue_parallel(get_grass_update_job(engine.grass, scaled_delta_time), engine.grass.roots.length());
 
 	// Jobs are just discarded if we are paused. Ofc they shouln't be created, but we are still
 	// experimenting so this is okay
@@ -437,10 +432,10 @@ void render_engine(Engine & engine)
 
 	TIMER_BEGIN(setup_draw_buffers);
 
-		OctreeInfo octree_info = {};
-		octree_info.max_depth() = engine.draw_options.voxel_settings.draw_octree_depth;
-		octree_info.world_min.xyz = float3(0,0,0);
-		octree_info.world_max.xyz = float3(engine.world_settings.world_size, engine.world_settings.world_size, engine.world_settings.world_size);
+		VoxelWorldInfo voxel_world_info = {};
+		voxel_world_info.max_depth() = engine.draw_options.voxel_settings.draw_octree_depth;
+		voxel_world_info.world_min.xyz = float3(0,0,0);
+		voxel_world_info.world_max.xyz = float3(engine.world_settings.world_size, engine.world_settings.world_size, engine.world_settings.world_size);
 
 		LightData light_data = engine.light_settings.get_light_data();
 		
@@ -467,19 +462,12 @@ void render_engine(Engine & engine)
 
 	TIMER_BEGIN(copy_to_graphics);
 
-		if (engine.draw_options.draw_method == ComputeShaderDrawMethod::octree)
-		{
-			// size_t octree_memory_size = sizeof(OctreeNode) * engine.renderer.temp_octree._used_node_count;
-			// graphics_write_buffer(graphics, engine.octree_buffer_handle, octree_memory_size, engine.renderer.temp_octree.nodes.get_memory_ptr());
-		}
-		else if (engine.draw_options.draw_method == ComputeShaderDrawMethod::chunktree)
-		{
-			size_t chunk_map_memory_size = engine.renderer.chunk_map.nodes.memory_size();
-			// graphics_write_buffer(graphics, engine.octree_buffer_handle, chunk_map_memory_size, engine.renderer.temp_chunk_map.nodes.get_memory_ptr());
+		// Todo(Leo): this is still problematic, since we are not synced with rendering, and this might be updated from cpu
+		// (voxel renderer) while being copied to actual gpu buffer. Now it could be fixed by setting virtual frame
+		// count to 1, but i am not sure if I want to do that yet. It might be okay though.	
+		graphics_buffer_apply(graphics, engine.octree_buffer_handle);
 
-		}	graphics_buffer_apply(graphics, engine.octree_buffer_handle);
-
-		graphics_write_buffer(graphics, engine.octree_info_buffer_handle, sizeof octree_info, &octree_info);
+		graphics_write_buffer(graphics, engine.octree_info_buffer_handle, sizeof voxel_world_info, &voxel_world_info);
 		graphics_write_buffer(graphics, engine.camera_buffer_handle, sizeof camera_data, &camera_data);
 		graphics_write_buffer(graphics, engine.lighting_buffer_handle, sizeof light_data, &light_data);
 

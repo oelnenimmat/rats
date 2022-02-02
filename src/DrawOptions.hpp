@@ -45,8 +45,7 @@ enum struct ComputeShaderDrawMode : int
 
 enum struct ComputeShaderDrawMethod : int
 {
-	octree = 0,
-	chunktree,
+	chunktree = 0,
 
 	COUNT
 };
@@ -69,7 +68,6 @@ namespace gui
 	{
 		constexpr char const * c_strings [] =
 		{
-			"octree",
 			"chunktree",
 		};
 		int * value = reinterpret_cast<int*>(&m);

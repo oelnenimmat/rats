@@ -6,6 +6,7 @@
 #include "jobs.hpp"
 #include "DebugTerrain.hpp"
 #include "GameCamera.hpp"
+#include "memory.hpp"
 
 struct CharacterInput
 {
@@ -16,7 +17,7 @@ struct CharacterInput
 	bool jump;
 };
 
-CharacterInput get_character_input(Input * input, GameCamera const & camera, float delta_time)
+CharacterInput get_character_input(Input * input, GameCamera const & camera)
 {
 	CharacterInput result = {};
 
@@ -51,9 +52,8 @@ CharacterInput get_character_input(Input * input, GameCamera const & camera, flo
 	result.move_x = move.x;
 	result.move_z = move.z;
 
-	result.delta_time = delta_time;
 	result.jump = input_key_went_down(input, InputKey::keyboard_space);
-	
+
 
 	return result;
 }
@@ -117,28 +117,29 @@ namespace gui
 struct CharacterUpdateJob
 {	
 	// And bädäm, just like this, we can update many characters with a price(complexity) of one
-	Character * 		characters;
-	CharacterInput * 	inputs;
+	Slice<Character> 		characters;
+	Slice<CharacterInput> 	inputs;
 
 	DebugTerrain *	terrain;
 	float3  		min_position;
 	float3  		max_position;
+	float  			delta_time;
 
-	void execute(int i) const
+	void execute(int i)
 	{
-		Character & character = characters[i];
-		CharacterInput & input = inputs[i];
+		Character & character 			= characters[i];
+		CharacterInput const & input 	= inputs[i];
 
-		float3 movement = float3(input.move_x, 0, input.move_z) * input.delta_time * character.speed;
+		float3 movement = float3(input.move_x, 0, input.move_z) * delta_time * character.speed;
 
 		float3 move_end_position = character.position + movement;
 		move_end_position.y = terrain->get_height(move_end_position.xz);
 
 		character.position = clamp(move_end_position, min_position, max_position);
 
-		character.y_velocity -= 10 * input.delta_time;
+		character.y_velocity -= 10 * delta_time;
 
-		character.y_position += character.y_velocity * input.delta_time;
+		character.y_position += character.y_velocity * delta_time;
 		if (character.y_position < move_end_position.y)
 		{
 			character.y_position = move_end_position.y;

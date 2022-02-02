@@ -1,10 +1,10 @@
 #pragma once
 
 #include "vectors.hpp"
-#include "Octree.hpp"
 #include "WorldSettings.hpp"
 #include "DrawOptions.hpp"
 #include "ChunkMap.hpp"
+#include "loop.hpp"
 
 struct ChunkMapNode
 {
@@ -19,11 +19,17 @@ struct ChunkMapNode
 	int & has_children() { return material_child_offset.z; }
 };
 
+struct VoxelWorldInfo
+{
+	int4 max_depth_and_stuff;
+	float4 world_min;
+	float4 world_max;
+
+	int & max_depth() { return max_depth_and_stuff.x; }
+};
+
 struct VoxelRenderer
 {
-	Octree octree;
-	Octree temp_octree;
-
 	ChunkMap<ChunkMapNode> chunk_map;
 	ChunkMap<ChunkMapNode> temp_chunk_map;
 
@@ -46,21 +52,7 @@ void init(VoxelRenderer & renderer, WorldSettings * world_settings, DrawOptions 
 // Call prepare_frame always once per frame before drawing dynamic objects
 void prepare_frame(VoxelRenderer & renderer, Allocator & temp_allocator)
 {
-	if (renderer.draw_options->draw_method == ComputeShaderDrawMethod::octree)
-	{
-		renderer.temp_octree.dispose();
-		renderer.temp_octree.init(renderer.draw_options->voxel_settings.draw_octree_depth, temp_allocator);
-
-		size_t octree_memory_size = sizeof(OctreeNode) * renderer.octree._used_node_count;
-		renderer.temp_octree._used_node_count = renderer.octree._used_node_count;
-		memcpy(renderer.temp_octree.nodes.get_memory_ptr(), renderer.octree.nodes.get_memory_ptr(), octree_memory_size);
-	}
-	else
-	{
-		copy_slice_data(renderer.temp_chunk_map.nodes, renderer.chunk_map.nodes);
-	}
-
-
+	copy_slice_data(renderer.temp_chunk_map.nodes, renderer.chunk_map.nodes);
 }
 
 void draw_cuboid_for_chunktree(VoxelRenderer & renderer, float3 position_WS, float size, float3 color)
@@ -103,60 +95,7 @@ void draw_cuboid_for_chunktree(VoxelRenderer & renderer, float3 position_WS, flo
 }
 
 
-void draw_cuboid_for_octree(VoxelRenderer & renderer, float3 position_WS, int depth, float size, float3 color)
-{	
-
-	float3 WS_to_VS = float3(1 << depth) / renderer.world_settings->world_size;
-
-
-	// thing is currently a cuboid
-	float3 size_WS 		= float3(size, 2 * size, size);
-	int3 size_VS 		= max(int3(size_WS * WS_to_VS), 1); // Always draw at least one voxel, for now at least, for debug
-
-	float3 offset_OS 	= float3(-size_WS.x / 2, 0, -size_WS.z / 2);
-	float3 start_WS 	= position_WS + offset_OS;
-	int3 start_VS 		= int3(floor(start_WS * WS_to_VS));
-
-	for_xyz(size_VS, [&](int x, int y, int z)
-	{
-		// float3 position_OS = float3(
-		// 	x / WS_to_VS.x + offset_OS.x,
-		// 	y / WS_to_VS.y + size,
-		// 	z / WS_to_VS.z + offset_OS.z
-		// );
-
-		float3 position_OS = float3(x,y,z) - offset_OS;
-
-		// WS and OS are same size, they are just located different places
-		// if (length(position_OS.xz) < size / 2)
-		{
-			bool is_first = (x == 0 && y == 0 && z == 0);
-
-			x += start_VS.x;
-			y += start_VS.y;
-			z += start_VS.z;
-
-			OctreeNode & node = renderer.temp_octree.get_or_add_and_get_node(x,y,z,depth);
-			node.material() = 1;
-
-			float3 normal = position_OS;
-			// normal.y *= 0.5;
-			normal = normalize(normal);
-			node.normal() = float3(0,0,0);//normal;
-			node.color = float4(color, 1);
-			
-		}
-	});
-}
-
 void draw_cuboid(VoxelRenderer & renderer, float3 position_WS, int depth, float size, float3 color)
 {
-	if (renderer.draw_options->draw_method == ComputeShaderDrawMethod::octree)
-	{
-		draw_cuboid_for_octree(renderer, position_WS, depth, size, color);
-	}
-	else
-	{
-		draw_cuboid_for_chunktree(renderer, position_WS, size, color);
-	}
+	draw_cuboid_for_chunktree(renderer, position_WS, size, color);
 }
