@@ -163,8 +163,16 @@ struct Array
 	const T * begin() const { return _memory; }
 	const T * end() const { return _memory + _length; }
 
+
 private:
 	size_t 		_length;
 	T * 		_memory;
 	Allocator * _allocator;
 };
+
+template<typename T>
+void copy_array_contents(Array<T> & src, Array<T> const & dst)
+{
+	MINIMA_ASSERT(src.length() == dst.length());
+	memcpy(src.get_memory_ptr(), dst.get_memory_ptr(), src.memory_size());
+}

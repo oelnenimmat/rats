@@ -36,9 +36,12 @@ struct Engine
 	ArenaAllocator temp_allocator;
 	ArenaAllocator voxel_allocator;
 
+	bool enabled() { return window_focused; }
 	bool running;
 	bool limit_framerate;
 	bool paused;
+
+	bool window_focused = true;
 
 	bool show_imgui_demo = false;
 	bool show_imgui_style_editor = false;
@@ -67,7 +70,10 @@ struct Engine
 	GrassSystem grass = {};
 	DebugTerrain debug_terrain = {};
 
-	CameraMode camera_mode;
+
+	CameraMode 	camera_mode;
+	bool 		camera_disabled_because_no_focus = false;
+
 	Character character = { float3(5,5,5), 3.0f };	
 
 	int4 debug_voxel = int4(15, 15, 15, 4);
@@ -86,7 +92,7 @@ struct Engine
 	int lighting_buffer_handle;
 
 	static constexpr char const * save_filenme = "data/engine.json";
-	static constexpr char const * style_filename = "data/imgui_style.json";;
+	static constexpr char const * style_filename = "data/imgui_style.json";
 };
 
 inline SERIALIZE_STRUCT(Engine const & engine)

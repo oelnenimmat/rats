@@ -455,7 +455,9 @@ void graphics_draw_frame(Graphics * context)
 		1, 1, &frame.per_frame_descriptor_set, 0, nullptr
 	);
 
-	vkCmdDispatch(cmd, context->render_target_width, context->render_target_height, 1);
+	// https://www.reddit.com/r/vulkan/comments/cabask/set_localsize_dynamically/
+	vkCmdDispatch(cmd, context->render_target_width / 16, context->render_target_height / 16, 1);
+	// vkCmdDispatch(cmd, context->render_target_width / 32, context->render_target_height / 32, 1);
 
 	END_TIMER(run_compute);
 
@@ -529,21 +531,21 @@ void graphics_draw_frame(Graphics * context)
 
 	BEGIN_TIMER(submit);
 
-	VULKAN_HANDLE_ERROR(vkEndCommandBuffer(cmd));
+		VULKAN_HANDLE_ERROR(vkEndCommandBuffer(cmd));
 
-	auto submit_info = vk_submit_info();
+		auto submit_info = vk_submit_info();
 
-	VkSemaphore wait_semaphores[] = { frame.image_available_semaphore };
-	VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-	submit_info.waitSemaphoreCount = 1;
-	submit_info.pWaitSemaphores = wait_semaphores;
-	submit_info.pWaitDstStageMask = wait_stages;
-	
-	submit_info.commandBufferCount = 1;
-	submit_info.pCommandBuffers = &frame.command_buffer;
+		VkSemaphore wait_semaphores[] = { frame.image_available_semaphore };
+		VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+		submit_info.waitSemaphoreCount = 1;
+		submit_info.pWaitSemaphores = wait_semaphores;
+		submit_info.pWaitDstStageMask = wait_stages;
+		
+		submit_info.commandBufferCount = 1;
+		submit_info.pCommandBuffers = &frame.command_buffer;
 
-	submit_info.signalSemaphoreCount = 1;
-	submit_info.pSignalSemaphores = &frame.rendering_finished_semaphore;
+		submit_info.signalSemaphoreCount = 1;
+		submit_info.pSignalSemaphores = &frame.rendering_finished_semaphore;
 
 	vkResetFences(context->device, 1, &frame.in_use_fence);
 

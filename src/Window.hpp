@@ -24,7 +24,18 @@ int window_get_height(Window const * window);
 bool window_is_cursor_visible(Window const * window);
 void window_set_cursor_visible(Window * window, bool visible);
 
-int window_sleep(Window const*, float seconds);
+int window_sleep(Window const*, int milliseconds);
+
+enum WindowCallback
+{
+	WindowCallback_on_lose_focus,
+	WindowCallback_on_gain_focus,
+
+	WindowCallback_COUNT
+};
+
+using window_callback_func = void(*)(void*);
+void window_set_callback(Window *, WindowCallback id, void * data, window_callback_func callback);
 
 // // Todo(Leo): maybe do own "platform.hpp" header, but im still experimenting
 // bool platform_create_arena_allocator(ArenaAllocator * out_arena_allocator, size_t capacity);

@@ -59,6 +59,44 @@ static void end_frame(Engine&);
 
 static void shutdown_engine(Engine&);
 
+void engine_on_window_lose_focus(void * data)
+{
+	Engine * engine = reinterpret_cast<Engine*>(data);
+	engine->window_focused = false;
+
+	window_set_cursor_visible(engine->window, true);
+	switch(engine->camera_mode)
+	{
+		case CameraMode::editor:
+			engine->camera_disabled_because_no_focus = engine->camera.enabled;
+			engine->camera.enabled = false;
+			break;
+
+		case CameraMode::game:
+			engine->camera_disabled_because_no_focus = engine->game_camera.enabled;
+			engine->game_camera.enabled = false;
+			break;
+	}
+}
+
+void engine_on_window_gain_focus(void * data)
+{
+	Engine * engine = reinterpret_cast<Engine*>(data);
+	engine->window_focused = true;
+
+	if (engine->camera_disabled_because_no_focus)
+	{
+		engine->camera_disabled_because_no_focus = false;
+		window_set_cursor_visible(engine->window, false);
+
+		switch(engine->camera_mode)
+		{
+			case CameraMode::editor: engine->camera.enabled = true; break;
+			case CameraMode::game: engine->game_camera.enabled = true; break;
+		}
+	}
+}
+
 void run_engine(Window * window, Graphics * graphics, Input * input)
 {
 	// void run_experiments();
@@ -67,6 +105,9 @@ void run_engine(Window * window, Graphics * graphics, Input * input)
 	Engine engine{};
 	initialize_engine(engine, graphics, window, input);
 
+	window_set_callback(engine.window, WindowCallback_on_lose_focus, &engine, engine_on_window_lose_focus);
+	window_set_callback(engine.window, WindowCallback_on_gain_focus, &engine, engine_on_window_gain_focus);
+
 	// Init separately, so we are certain that we don't account for
 	// initialization time for the first frame
 	init(engine.clock); 
@@ -74,9 +115,18 @@ void run_engine(Window * window, Graphics * graphics, Input * input)
 	while(engine.running)
 	{	
 		TIME_FUNCTION(begin_frame(engine), engine.timings.begin_frame);
-		TIME_FUNCTION(engine_gui(engine), engine.timings.engine_gui);
-		TIME_FUNCTION(update_engine(engine), engine.timings.update_engine);
-		TIME_FUNCTION(render_engine(engine), engine.timings.render_engine);
+		if (engine.enabled())
+		{
+			TIME_FUNCTION(engine_gui(engine), engine.timings.engine_gui);
+			TIME_FUNCTION(update_engine(engine), engine.timings.update_engine);
+			TIME_FUNCTION(render_engine(engine), engine.timings.render_engine);
+		}
+		else
+		{
+			// Sleep, but check in every once in a while to see if we get new window events
+			// in begin_frame. Those will tell us to re-enable engine.
+			window_sleep(engine.window, 100);
+		}
 		TIME_FUNCTION(end_frame(engine), engine.timings.end_frame);
 	}
 
@@ -400,7 +450,7 @@ void render_engine(Engine & engine)
 		else if (engine.draw_options.draw_method == ComputeShaderDrawMethod::chunktree)
 		{
 			size_t chunk_map_memory_size = engine.renderer.chunk_map.nodes.memory_size();
-			graphics_write_buffer(graphics, engine.octree_buffer_handle, chunk_map_memory_size, engine.renderer.chunk_map.nodes.get_memory_ptr());
+			graphics_write_buffer(graphics, engine.octree_buffer_handle, chunk_map_memory_size, engine.renderer.temp_chunk_map.nodes.get_memory_ptr());
 		}	
 
 		graphics_write_buffer(graphics, engine.octree_info_buffer_handle, sizeof octree_info, &octree_info);
@@ -450,8 +500,6 @@ void begin_frame(Engine & engine)
 	{
 		engine.running = false;
 	}
-
-	imgui_begin_frame(engine.graphics);
 }
 
 void end_frame(Engine & engine)
@@ -464,7 +512,8 @@ void end_frame(Engine & engine)
 	float limit = 1.0f / 30;
 	if (engine.limit_framerate && delta_time < limit)
 	{
-		engine.statistics.time_slept_ms = window_sleep(engine.window, limit - clock.unscaled_delta_time);
+		int milliseconds_to_sleep = static_cast<int>((limit - clock.unscaled_delta_time) * 1000);
+		engine.statistics.time_slept_ms = window_sleep(engine.window, milliseconds_to_sleep);
 
 		current_time = time_now();
 		delta_time = time_elapsed_time(clock.frame_flip_time, current_time);
@@ -496,6 +545,8 @@ namespace gui
 void engine_gui(Engine & engine)
 {
 	using namespace gui;
+
+	imgui_begin_frame(engine.graphics);
 
 	ImVec2 top_right_gui_window_pos = ImVec2(window_get_width(engine.window) - 20.0f, 20.0f);
 	ImGui::SetNextWindowPos(top_right_gui_window_pos, ImGuiCond_Always, {1,0});

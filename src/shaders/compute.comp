@@ -1,6 +1,10 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 
+// https://www.reddit.com/r/vulkan/comments/cabask/set_localsize_dynamically/
+layout(local_size_x = 16, local_size_y = 16) in;
+// layout(local_size_x = 32, local_size_y = 32) in;
+
 layout(set = 0, binding = 0, rgba8) uniform writeonly image2D result_image;
 
 

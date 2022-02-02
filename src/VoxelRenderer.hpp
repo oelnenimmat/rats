@@ -28,8 +28,8 @@ struct ChunkMap
 
 void init (ChunkMap & map, Allocator & allocator)
 {
-	map.chunk_count = 8;
-	map.voxel_count_in_chunk = 16;
+	map.chunk_count = 16;
+	map.voxel_count_in_chunk = 8;
 
 	int chunk_count_3d = map.chunk_count * map.chunk_count * map.chunk_count;
 	int voxel_count_3d = map.voxel_count_in_chunk * map.voxel_count_in_chunk * map.voxel_count_in_chunk;
@@ -99,17 +99,59 @@ void prepare_frame(VoxelRenderer & renderer, Allocator & temp_allocator)
 		renderer.temp_octree._used_node_count = renderer.octree._used_node_count;
 		memcpy(renderer.temp_octree.nodes.get_memory_ptr(), renderer.octree.nodes.get_memory_ptr(), octree_memory_size);
 	}
+	else
+	{
+		copy_array_contents(renderer.temp_chunk_map.nodes, renderer.chunk_map.nodes);
+	}
+
 
 }
 
-void draw_cuboid(VoxelRenderer & renderer, float3 position_WS, int depth, float size, float3 color)
+void draw_cuboid_for_chunktree(VoxelRenderer & renderer, float3 position_WS, float size, float3 color)
 {	
-	if (renderer.draw_options->draw_method == ComputeShaderDrawMethod::chunktree)
+	int voxel_count_in_world = renderer.chunk_map.voxel_count_in_chunk * renderer.chunk_map.chunk_count;
+	float WS_to_VS =  (float)voxel_count_in_world/ renderer.world_settings->world_size;
+
+
+	// thing is currently a cuboid
+	float3 size_WS 		= float3(size, 2 * size, size);
+	int3 size_VS 		= max(int3(size_WS * WS_to_VS), 1); // Always draw at least one voxel, for now at least, for debug
+
+	float3 offset_OS 	= float3(-size_WS.x / 2, 0, -size_WS.z / 2);
+	float3 start_WS 	= position_WS + offset_OS;
+	int3 start_VS 		= int3(floor(start_WS * WS_to_VS));
+
+	for_xyz(size_VS, [&](int x, int y, int z)
 	{
-		return;
-	}
+		float3 position_OS = float3(x,y,z) - offset_OS;
+
+		// WS and OS are same size, they are just located different places
+		// if (length(position_OS.xz) < size / 2)
+		{
+
+			x += start_VS.x;
+			y += start_VS.y;
+			z += start_VS.z;
+
+			ChunkMapNode & node = get_node(renderer.temp_chunk_map, x,y,z);
+			node.material() = 1;
+
+			float3 normal = position_OS;
+			// normal.y *= 0.5;
+			normal = normalize(normal);
+			node.normal() = normal;
+			node.color = float4(color, 1);
+			
+		}
+	});
+}
+
+
+void draw_cuboid_for_octree(VoxelRenderer & renderer, float3 position_WS, int depth, float size, float3 color)
+{	
 
 	float3 WS_to_VS = float3(1 << depth) / renderer.world_settings->world_size;
+
 
 	// thing is currently a cuboid
 	float3 size_WS 		= float3(size, 2 * size, size);
@@ -149,4 +191,16 @@ void draw_cuboid(VoxelRenderer & renderer, float3 position_WS, int depth, float 
 			
 		}
 	});
+}
+
+void draw_cuboid(VoxelRenderer & renderer, float3 position_WS, int depth, float size, float3 color)
+{
+	if (renderer.draw_options->draw_method == ComputeShaderDrawMethod::octree)
+	{
+		draw_cuboid_for_octree(renderer, position_WS, depth, size, color);
+	}
+	else
+	{
+		draw_cuboid_for_chunktree(renderer, position_WS, size, color);
+	}
 }

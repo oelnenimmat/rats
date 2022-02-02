@@ -6,9 +6,9 @@
 #include "voxel_data.glsl"
 
 
-const int chunk_count = 8;
+const int chunk_count = 16;
 const int chunk_count_3d = chunk_count * chunk_count * chunk_count;
-const int voxel_count_in_chunk = 16;
+const int voxel_count_in_chunk = 8;
 
 bool chunk_is_empty(const ivec3 voxel)
 {

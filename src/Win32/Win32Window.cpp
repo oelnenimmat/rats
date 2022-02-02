@@ -19,6 +19,21 @@ namespace
 	DWORD global_time_period_value;
 }
 
+struct Callback
+{
+	window_callback_func callback 	= nullptr;
+	void * data 					= nullptr;
+	
+	void call() const
+	{
+		if (callback != nullptr)
+		{
+			callback(data);
+		}
+	}
+};
+
+
 struct Window
 {
 	HWND 		hwnd;
@@ -34,6 +49,8 @@ struct Window
 
 	Input input;
 
+	Callback callbacks[WindowCallback_COUNT];
+
 	struct
 	{
 		bool resized;
@@ -45,6 +62,13 @@ Input * create_input(Window * window, Allocator*)
 	window->input.window = window;
 	return &window->input;
 }
+
+void window_set_callback(Window * window, WindowCallback id, void * data, window_callback_func callback)
+{
+	window->callbacks[id].callback = callback;
+	window->callbacks[id].data = data;
+}
+
 
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -103,6 +127,39 @@ LRESULT window_callback(HWND hwnd, UINT message, WPARAM w_param, LPARAM l_param)
 			bool handled = win32_input_handle_keyboard_event(&window->input, message, w_param, l_param);
 			result = handled ? 0 : ::DefWindowProc(hwnd, message, w_param, l_param);
 		} break;
+
+		// case WM_ACTIVATE:
+		// {
+		// 	std::cout << "WM_ACTIVATE\n";
+		// 	int status = LOWORD(w_param);
+		// 	bool minimized = HIWORD(w_param);
+
+		// 	switch (status)
+		// 	{
+		// 		case WA_ACTIVE:
+		// 		case WA_CLICKACTIVE:
+		// 			std::cout << "[WINDOW]: activate, " << minimized << "\n";
+		// 			window->callbacks[WindowCallback_on_gain_focus].call();
+		// 			break;
+
+		// 		case WA_INACTIVE:
+		// 			std::cout << "[WINDOW]: inactivate, " << minimized << "\n";
+		// 			window->callbacks[WindowCallback_on_lose_focus].call();
+		// 			break;
+		// 	}
+		// 	result = 0;
+		// } break;
+
+
+		case WM_SETFOCUS:
+			std::cout << "WM_SETFOCUS\n";
+			window->callbacks[WindowCallback_on_gain_focus].call();
+			break;
+
+		case WM_KILLFOCUS:
+			std::cout << "WM_KILLFOCUS\n";
+			window->callbacks[WindowCallback_on_lose_focus].call();
+			break;
 
 		default:
 			result = ::DefWindowProc(hwnd, message, w_param, l_param);
@@ -265,15 +322,14 @@ void window_set_cursor_visible(Window * window, bool visible)
 	::ShowCursor(visible);
 }
 
-int window_sleep(Window const * window, float seconds)
+int window_sleep(Window const * window, int milliseconds)
 {
 	// Todo(Leo): see if this is better, and would not require timeBeginPeriod/timeEndPeriod and win32_emergency_shutdown
 	// https://docs.microsoft.com/en-us/windows/win32/api/threadpoollegacyapiset/nf-threadpoollegacyapiset-createtimerqueuetimer
 	
-	MY_ENGINE_WARNING(seconds < 1, "Too much sleep");
-	seconds = seconds < 0 ? 0 : seconds < 1 ? seconds : 1;
+	MY_ENGINE_WARNING(milliseconds <= 1000, "Too much sleep");
+	milliseconds = milliseconds < 0 ? 0 : milliseconds < 1000 ? milliseconds : 1000;
 
-	DWORD milliseconds = static_cast<DWORD>(seconds * 1000.0f);
 	// std::cout << "[WIN32 Window]: Sleep " << milliseconds << " ms\n";
 	::Sleep(milliseconds);
 
