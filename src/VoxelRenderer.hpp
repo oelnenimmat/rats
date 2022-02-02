@@ -4,6 +4,7 @@
 #include "Octree.hpp"
 #include "WorldSettings.hpp"
 #include "DrawOptions.hpp"
+#include "ChunkMap.hpp"
 
 struct ChunkMapNode
 {
@@ -18,59 +19,13 @@ struct ChunkMapNode
 	int & has_children() { return material_child_offset.z; }
 };
 
-struct ChunkMap
-{
-	int chunk_count;
-	int voxel_count_in_chunk;
-
-	Array<ChunkMapNode> nodes;
-};
-
-void init (ChunkMap & map, Allocator & allocator)
-{
-	map.chunk_count = 16;
-	map.voxel_count_in_chunk = 8;
-
-	int chunk_count_3d = map.chunk_count * map.chunk_count * map.chunk_count;
-	int voxel_count_3d = map.voxel_count_in_chunk * map.voxel_count_in_chunk * map.voxel_count_in_chunk;
-
-	int total_chunk_count = chunk_count_3d;
-	int total_voxel_count = chunk_count_3d * voxel_count_3d;
-
-	int total_element_count = total_chunk_count + total_voxel_count;
-
-	map.nodes = Array<ChunkMapNode>(total_element_count, allocator, AllocationType::zero_memory);
-}
-
-ChunkMapNode & get_node(ChunkMap & map, int x, int y, int z)
-{
-	// todo: use slice
-	int chunk_count_3d = map.chunk_count * map.chunk_count * map.chunk_count;
-	int nodes_start = chunk_count_3d;
-
-	int3 xyz = int3(x,y,z);
-
-	int3 chunk = xyz / map.voxel_count_in_chunk;
-	int chunk_offset = chunk.x + chunk.y * map.chunk_count + chunk.z * map.chunk_count * map.chunk_count;
-	map.nodes[chunk_offset].has_children() = 1;
-
-
-	int3 voxel = xyz % map.voxel_count_in_chunk;
-
-	int voxel_offset = voxel.x + voxel.y * map.voxel_count_in_chunk + voxel.z * map.voxel_count_in_chunk * map.voxel_count_in_chunk;
-
-	int index = nodes_start + chunk_offset * map.voxel_count_in_chunk * map.voxel_count_in_chunk * map.voxel_count_in_chunk + voxel_offset;
-
-	return map.nodes[index];
-};
-
 struct VoxelRenderer
 {
 	Octree octree;
 	Octree temp_octree;
 
-	ChunkMap chunk_map;
-	ChunkMap temp_chunk_map;
+	ChunkMap<ChunkMapNode> chunk_map;
+	ChunkMap<ChunkMapNode> temp_chunk_map;
 
 	WorldSettings * world_settings;
 	DrawOptions * draw_options;
@@ -87,6 +42,7 @@ void init(VoxelRenderer & renderer, WorldSettings * world_settings, DrawOptions 
 	renderer.draw_options = draw_options;
 }
 
+
 // Call prepare_frame always once per frame before drawing dynamic objects
 void prepare_frame(VoxelRenderer & renderer, Allocator & temp_allocator)
 {
@@ -101,7 +57,7 @@ void prepare_frame(VoxelRenderer & renderer, Allocator & temp_allocator)
 	}
 	else
 	{
-		copy_array_contents(renderer.temp_chunk_map.nodes, renderer.chunk_map.nodes);
+		copy_slice_data(renderer.temp_chunk_map.nodes, renderer.chunk_map.nodes);
 	}
 
 

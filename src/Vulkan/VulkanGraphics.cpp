@@ -1,3 +1,7 @@
+/*
+https://arm-software.github.io/vulkan_best_practice_for_mobile_developers/samples/performance/pipeline_barriers/pipeline_barriers_tutorial.html
+*/
+
 #include <iostream>
 
 #include "../configuration.hpp"
@@ -281,7 +285,7 @@ Graphics * create_graphics(Window const * window, Allocator * allocator)
 	return context;
 }
 
-void clear_graphics(Graphics * context)
+void destroy_graphics(Graphics * context, Allocator * allocator)
 {
 	vkDeviceWaitIdle(context->device);
 
@@ -289,6 +293,7 @@ void clear_graphics(Graphics * context)
 	{
 		if(buffer.created)
 		{
+			MY_ENGINE_WARNING(false, "Undestroyed buffer at graphics destruction");
 			buffer.destroy();
 		}
 	});
@@ -313,12 +318,9 @@ void clear_graphics(Graphics * context)
 	vulkan_destroy_instance(context);
 	
 	std::cout << "[VULKAN]: Cleared\n";
-}
 
-void destroy_graphics(Graphics * context, Allocator * allocator)
-{
-	clear_graphics(context);
 	allocator->deallocate(context);
+	memset(context, 0, sizeof *context);
 
 	std::cout << "[VULKAN]: Destroyed\n";
 }
@@ -399,17 +401,19 @@ void graphics_draw_frame(Graphics * context)
 
 
 
+
 	// vkCmdEndRenderPass(cmd);
 	// ------------------------------------------------------
 
+	VkFence apply_staging_buffers_fence = VK_NULL_HANDLE;
+
+
+	// auto apply_cmd = begin_single_use_command_buffer(context);
 	context->per_frame_buffer_pool.for_each([cmd](ComputeBuffer & buffer)
 	{
+
 		if(buffer.created && buffer.needs_to_apply)
 		{
-
-		// Todo: this bad, this calls vkDeviceWaitIdle in middle of render loop
-		// move this copy to actual command buffer
-		// auto cmd = begin_single_use_command_buffer(context);
 			VkBufferCopy copy =
 			{
 				0,
@@ -417,14 +421,16 @@ void graphics_draw_frame(Graphics * context)
 				buffer.apply_size
 			};
 			vkCmdCopyBuffer(cmd, buffer.staging_buffer, buffer.buffer, 1, &copy);
-		// execute_single_use_command_buffer(context, cmd);
 
 			buffer.needs_to_apply = false;
 			buffer.apply_offset = 0;
 			buffer.apply_size = 0;
 		}
 	});
+	// execute_single_use_command_buffer(context, apply_cmd);
 
+	
+	
 
 	// ------------------------------------------------------
 
@@ -514,18 +520,18 @@ void graphics_draw_frame(Graphics * context)
 
 	END_TIMER(blit);
 
-	// cmd_transition_image_layout(
-	// 	cmd,
-	// 	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-	// 	VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-	// 	context->swapchain_images[image_index]
-	// );
-
 	BEGIN_TIMER(imgui);
 
-	// Todo(Leo): imgui render pass now does the above layout transition, it probably is not good idea.
-	// since it quite hidden and also super important
-	imgui_render_frame(context);
+		// cmd_transition_image_layout(
+		// 	cmd,
+		// 	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		// 	VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+		// 	context->swapchain_images[image_index]
+		// );
+
+		// Todo(Leo): imgui render pass now does the above layout transition, it probably is not good idea.
+		// since it quite hidden and also super important
+		imgui_render_frame(context);
 
 	END_TIMER(imgui);
 
@@ -547,9 +553,9 @@ void graphics_draw_frame(Graphics * context)
 		submit_info.signalSemaphoreCount = 1;
 		submit_info.pSignalSemaphores = &frame.rendering_finished_semaphore;
 
-	vkResetFences(context->device, 1, &frame.in_use_fence);
+		vkResetFences(context->device, 1, &frame.in_use_fence);
 
-	VULKAN_HANDLE_ERROR(vkQueueSubmit(context->graphics_queue, 1, &submit_info, frame.in_use_fence));
+		VULKAN_HANDLE_ERROR(vkQueueSubmit(context->graphics_queue, 1, &submit_info, frame.in_use_fence));
 	
 	END_TIMER(submit);
 
@@ -778,12 +784,21 @@ void * graphics_buffer_get_writeable_memory(Graphics * context, int buffer_handl
 	MINIMA_ASSERT(context->per_frame_buffer_pool.is_in_use(buffer_handle));
 
 	ComputeBuffer & buffer = context->per_frame_buffer_pool[buffer_handle];
-	return buffer.mapped_memories[context->current_frame_index];
 
-	// todo: return staging buffer memory
+	if (buffer.use_staging_buffer)
+	{
+		return buffer.mapped_staging_memory;
+	}
+	else
+	{
+		return buffer.mapped_memories[context->current_frame_index];
+	}
 }
 
-void graphics_apply_buffer(Graphics * context, int buffer_handle)
+void graphics_buffer_apply(Graphics * context, int buffer_handle)
 {
-	// todo: apply staging buffer
+	ComputeBuffer & buffer = context->per_frame_buffer_pool[buffer_handle];
+	buffer.needs_to_apply = true;
+	buffer.apply_offset = 0;
+	buffer.apply_size = buffer.single_buffer_memory_size;
 }

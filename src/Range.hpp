@@ -9,7 +9,7 @@ struct Range
 	float min;
 	float max;
 
-	float evaluate(float position)
+	float evaluate(float position) const
 	{
 		return rats::lerp(min, max, position);
 	}

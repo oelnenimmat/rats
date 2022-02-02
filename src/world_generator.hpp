@@ -123,8 +123,8 @@ void generate_test_world_for_chunktree(
 	WorldSettings const & world_settings
 )
 {
-	init(renderer.chunk_map, global_debug_allocator);
-	init(renderer.temp_chunk_map, global_debug_allocator);
+	// init(renderer.chunk_map, global_debug_allocator);
+	// init(renderer.temp_chunk_map, global_debug_allocator);
 
 	Noise2D noise 				= make_noise(noise_settings);
 	auto color_hash 			= SmallXXHash::seed(32);

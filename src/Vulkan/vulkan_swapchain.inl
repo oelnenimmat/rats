@@ -91,15 +91,15 @@ namespace
 		}
 	}
 
-	VkCommandBuffer begin_single_use_command_buffer(Graphics * g)
+	VkCommandBuffer begin_single_use_command_buffer(Graphics * context)
 	{
 		auto cmd_allocate = vk_command_buffer_allocate_info();
-		cmd_allocate.commandPool = g->graphics_command_pool;
+		cmd_allocate.commandPool = context->graphics_command_pool;
 		cmd_allocate.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		cmd_allocate.commandBufferCount = 1;
 
 		VkCommandBuffer cmd;
-		vkAllocateCommandBuffers(g->device, &cmd_allocate, &cmd);
+		vkAllocateCommandBuffers(context->device, &cmd_allocate, &cmd);
 
 		auto cmd_begin = vk_command_buffer_begin_info();
 		cmd_begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -109,19 +109,26 @@ namespace
 		return cmd;
 	}
 
-	void execute_single_use_command_buffer(Graphics * g, VkCommandBuffer cmd)
+	void execute_single_use_command_buffer(Graphics * context, VkCommandBuffer cmd)
 	{
+		VkFence wait_fence;
+		auto fence_create_info = vk_fence_create_info();
+		vkCreateFence(context->device, &fence_create_info, nullptr, &wait_fence);
+
 		vkEndCommandBuffer(cmd);
 
 		auto queue_submit = vk_submit_info();
 		queue_submit.commandBufferCount = 1;
 		queue_submit.pCommandBuffers = &cmd;
 
-		vkQueueSubmit(g->graphics_queue, 1, &queue_submit, VK_NULL_HANDLE);
+		vkQueueSubmit(context->graphics_queue, 1, &queue_submit, wait_fence);
 
-		vkDeviceWaitIdle(g->device);
+		// vkDeviceWaitIdle(context->device);
 
-		vkFreeCommandBuffers(g->device, g->graphics_command_pool, 1, &cmd);		
+		vkWaitForFences(context->device, 1, &wait_fence, true, 0xFFFFFFFF);
+
+		vkDestroyFence(context->device, wait_fence, nullptr);
+		vkFreeCommandBuffers(context->device, context->graphics_command_pool, 1, &cmd);		
 	}
 
 	void cmd_transition_image_layout(

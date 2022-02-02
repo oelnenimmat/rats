@@ -102,8 +102,8 @@ struct GrassSystem
 	float2 	wind_noise_offset;
 
 	bool created = false;
-	LowLevelArray<float3> roots = {};
-	LowLevelArray<float3> tips = {};
+	Array<float3> roots = {};
+	Array<float3> tips = {};
 
 	void init(
 		GrassSettings & settings,
@@ -117,20 +117,20 @@ struct GrassSystem
 		this->terrain = &terrain;
 	}
 
-	~GrassSystem()
-	{
-		if (created)
-		{
-			roots.dispose();
-			tips.dispose();
-		}
-	}
+	// ~GrassSystem()
+	// {
+	// 	if (created)
+	// 	{
+	// 		roots.dispose();
+	// 		tips.dispose();
+	// 	}
+	// }
 };
 
 struct GrassUpdateJob
 {
-	LowLevelArray<float3> 	roots;
-	LowLevelArray<float3> 	tips;
+	Slice<float3> 	roots;
+	Slice<float3> 	tips;
 
 	float 	wind_strength;
 	float2 	wind_noise_offset;
@@ -157,8 +157,8 @@ GrassUpdateJob get_grass_update_job(GrassSystem & grass, float delta_time)
 	grass.wind_noise_offset += grass.settings->wind_noise_move_speed * delta_time;
 
 	GrassUpdateJob job 		= {};
-	job.roots 				= grass.roots;
-	job.tips 				= grass.tips;
+	job.roots 				= make_slice(grass.roots, 0, grass.roots.length());
+	job.tips 				= make_slice(grass.tips, 0, grass.tips.length());
 	job.wind_strength 		= grass.settings->wind_strength;
 	job.wind_noise_offset 	= grass.wind_noise_offset;
 	job.wind_noise 			= make_noise(grass.settings->wind_noise_settings);
@@ -175,8 +175,8 @@ void generate_grass(GrassSystem & grass)
 		grass.tips.dispose();
 	}
 
-	grass.roots = LowLevelArray<float3>(grass.settings->count, *grass.allocator);
-	grass.tips = LowLevelArray<float3>(grass.settings->count, *grass.allocator);
+	grass.roots = Array<float3>(grass.settings->count, *grass.allocator);
+	grass.tips = Array<float3>(grass.settings->count, *grass.allocator);
 
 	// Noise2D noise = make_noise(*grass.noise_settings);
 
@@ -210,29 +210,24 @@ namespace gui
 
 		return helper.dirty;
 	}
-
-	// bool edit(char const * label, GrassSystem & grass)
-	// {
-	// 	return edit(grass);	
-	// }
 }
 
-void draw_grass(GrassSystem const & grass, Octree & octree, float3 world_size)
+void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 world_size)
 {
-	if (grass.roots.empty())
+	if (grass.roots.length() == 0)
 	{
 		return;
 	}
 
-	float3 world_to_voxel = float3(1 << (grass.settings->depth)) / world_size;
+	float3 WS_to_VS = float3(renderer.chunk_map.chunk_count * renderer.chunk_map.voxel_count_in_chunk) / world_size;
 
 	for (int i = 0; i < grass.roots.length(); i++)
 	{
 		float3 root = grass.roots[i];
 		float3 tip = grass.tips[i];
 
-		int3 start_VS = int3(floor(root * world_to_voxel));
-		int3 end_VS = int3(floor((root + tip) * world_to_voxel));
+		int3 start_VS = int3(floor(root * WS_to_VS));
+		int3 end_VS = int3(floor((root + tip) * WS_to_VS));
 
 		int steps = end_VS.y - start_VS.y;
 
@@ -259,30 +254,14 @@ void draw_grass(GrassSystem const & grass, Octree & octree, float3 world_size)
 			int x = floor(tx);
 			int z = floor(tz);
 
-/*
-			int depth = y < steps / 2 ? grass.settings->depth - 1 : grass.settings->depth;
-			int _x = y < steps / 2 ? (x + start_VS.x) / 2 : x;
-			int _y = y < steps / 2 ? (y + start_VS.y) / 2 : y;
-			int _z = y < steps / 2 ? (z + start_VS.z) / 2 : z;
-
-			auto & node = octree.get_or_add_and_get_node(_x, _y, _z, depth);
+			auto & node = get_node(
+				renderer.temp_chunk_map,
+				x + start_VS.x,
+				y + start_VS.y,
+				z + start_VS.z
+			);
 			node.material() = 2;
 			node.color = color;
-*/
-			if (y < (steps / 2))
-			{
-				int depth = grass.settings->depth - 1;
-				auto & node = octree.get_or_add_and_get_node((x + start_VS.x) / 2, (y + start_VS.y)/2, (z + start_VS.z)/2, depth);
-				node.material() = 2;
-				node.color = color;
-			}
-			else
-			{
-				int depth = grass.settings->depth;
-				auto & node = octree.get_or_add_and_get_node(x + start_VS.x, y + start_VS.y, z + start_VS.z, depth);
-				node.material() = 2;
-				node.color = color;
-			}
 		}
 	}
 }

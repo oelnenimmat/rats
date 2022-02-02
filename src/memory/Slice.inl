@@ -1,77 +1,57 @@
-// Should be included to memory.hpp as inline struct template definition
+// Should be included to data.hpp as inline struct template definition
 
 template <typename T>
 struct Slice
 {
-	Slice(T * memory, size_t length) :
-		_memory(memory),
-		_length(length)
-	{}
-
-	const T & operator[](size_t index)
+	T & operator[](size_t index)
 	{
-		MINIMA_ASSERT(_memory !=nullptr);
+		MINIMA_ASSERT(_data !=nullptr);
 		MINIMA_ASSERT(index < _length);
 
-		return _memory[index];
+		return _data[index];
 	}
 
-	const T * begin() { return _memory; }
-	const T * end() { return _memory + _length; }
+	T const & operator[](size_t index) const
+	{
+		MINIMA_ASSERT(_data !=nullptr);
+		MINIMA_ASSERT(index < _length);
+
+		return _data[index];
+	}
+
+	const T * begin() { return _data; }
+	const T * end() { return _data + _length; }
+
+	size_t length() const { return _length; }
+	size_t memory_size() const { return _length * sizeof(T); }
+	T * get_memory_ptr() const { return _data; }
 
 private:
-	T * _memory;
 	size_t _length;
-};
-
-/*
-template <typename T>
-struct Slice3D
-{
-	Slice3D(T * data, int3 data_sizes, int3 data_offset, int3 sizes) : 
-		_data(data),		
-		_data_sizes(data_sizes),		
-		_data_offset(data_offset),		
-		_sizes(sizes)
-	{
-		#ifdef MY_ENGINE_DEBUG
-			int3 bound = _data_offset + _sizes;
-			MINIMA_ASSERT(
-				bound.x <= _data_sizes.x 
-				&& bound.y <= _data_sizes.y 
-				&& bound.z <= _data_sizes.z
-			);
-		#endif
-	}		
-
-	T & operator()(int x, int y, int z)
-	{
-		return _data[convert_index(x,y,z)];
-	}
-
-	T & operator()(int3 id)
-	{
-		return operator()(id.x, id.y, id.z);
-	}
-
-	int3 sizes()
-	{
-		return _sizes;
-	}
-
-private:
-	int convert_index (int x, int y, int z)
-	{
-		x += _data_offset.x;
-		y += _data_offset.y;
-		z += _data_offset.z;
-
-		return x + y * _data_sizes.x + z * _data_sizes.x + _data_sizes.y;
-	}
-	
 	T * _data;
-	int3 _data_sizes;
-	int3 _data_offset;
-	int3 _sizes;
+
+	template<typename U>
+	friend Slice<U> make_slice(size_t length, U * data);
 };
-*/
+
+template<typename T>
+Slice<T> make_slice(size_t length, T * data)
+{
+	Slice<T> slice;
+	slice._length = length;
+	slice._data = data;
+	return slice;
+}
+
+template <typename T>
+Slice<T> make_slice(Array<T> & array, size_t first, size_t length)
+{
+	return make_slice<T>(length, array.get_memory_ptr() + first);
+}
+
+template<typename T>
+void copy_slice_data(Slice<T> & src, Slice<T> const & dst)
+{
+	MINIMA_ASSERT(src.length() == dst.length());
+	memcpy(src.get_memory_ptr(), dst.get_memory_ptr(), src.memory_size());
+}
