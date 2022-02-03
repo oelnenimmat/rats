@@ -625,21 +625,24 @@ void graphics_destroy_buffer(Graphics * context, int buffer_handle)
 
 bool graphics_bind_buffer(Graphics * context, int buffer_handle, int index_in_shader, GraphicsBufferType buffer_type)
 {
+	/*
+	bug fixed: buffer_handle was used in index_in_shader's place in vk_write_descriptor_set. That secretly worked
+	since they accidentally aligned. Issue was brought up when buffer creation order was changed.
+	*/
+
 	ComputeBuffer & buffer = context->per_frame_buffer_pool[buffer_handle];
-	
+
+	VkDescriptorBufferInfo buffer_infos [context->virtual_frame_count];	
+	VkWriteDescriptorSet writes [context->virtual_frame_count];
+
 	for (int i = 0; i < context->virtual_frame_count; i++)
 	{
-		VkDescriptorBufferInfo buffer_info { buffer.buffer, buffer.buffer_offsets[i], buffer.single_buffer_memory_size };
-
-		auto write = vk_write_descriptor_set(
-			context->virtual_frames[i].per_frame_descriptor_set,
-			buffer_handle,
-			descriptor_type_from(buffer_type),
-			&buffer_info
-		);
-
-		vkUpdateDescriptorSets(context->device, 1, &write, 0, nullptr);
+		buffer_infos[i] 	= { buffer.buffer, buffer.buffer_offsets[i], buffer.single_buffer_memory_size };
+		auto descriptor_set = context->virtual_frames[i].per_frame_descriptor_set;
+		writes[i] 			= vk_write_descriptor_set(descriptor_set, index_in_shader, descriptor_type_from(buffer_type), &buffer_infos[i]);
 	}
+
+	vkUpdateDescriptorSets(context->device, context->virtual_frame_count, writes, 0, nullptr);
 
 	return true;
 }
@@ -699,7 +702,7 @@ namespace
 	{
 		switch(type)
 		{
-			case GraphicsBufferType::compute: return VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+			case GraphicsBufferType::storage: return VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 			case GraphicsBufferType::uniform: return VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 		};
 
@@ -710,7 +713,7 @@ namespace
 	{
 		switch(type)
 		{
-			case GraphicsBufferType::compute: return VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+			case GraphicsBufferType::storage: return VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 			case GraphicsBufferType::uniform: return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 		};
 
@@ -721,6 +724,8 @@ namespace
 
 void ComputeBuffer::create(Graphics * context, size_t size, GraphicsBufferType type)
 {
+	// todo: maybe limit size if type is uniform
+
 	device = context->device;
 
 	size_t SWAG_alignment = 256;
@@ -732,7 +737,7 @@ void ComputeBuffer::create(Graphics * context, size_t size, GraphicsBufferType t
 	VULKAN_HANDLE_ERROR(vkBindBufferMemory(device, buffer, memory, 0));
 
 
-	if (type == GraphicsBufferType::compute)
+	if (type == GraphicsBufferType::storage)
 	{
 		use_staging_buffer = true;
 		// Create staging buffer

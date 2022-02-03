@@ -9,11 +9,13 @@ struct ChunkMap
 	Array<T> memory;
 	Slice<T> nodes;
 
+	T garbage_value = {};
 
-	// void dispose()
-	// {
-	// 	memory.dispose();
-	// }
+	void dispose()
+	{
+		memory.dispose();
+		nodes.dispose();
+	}
 };
 
 template<typename T>
@@ -47,6 +49,13 @@ void init (ChunkMap<T> & map, T * memory, int chunk_count, int voxel_count_in_ch
 template<typename T>
 T & get_node(ChunkMap<T> & map, int x, int y, int z)
 {
+	int max_dimension = map.chunk_count * map.voxel_count_in_chunk;
+	if (x < 0 || x >= max_dimension || y < 0 || y >= max_dimension || z < 0  || z >= max_dimension)
+	{
+		return map.garbage_value;
+	}	
+
+
 	// todo: use slice
 	int chunk_count_3d = map.chunk_count * map.chunk_count * map.chunk_count;
 	int nodes_start = chunk_count_3d;
@@ -55,6 +64,8 @@ T & get_node(ChunkMap<T> & map, int x, int y, int z)
 
 	int3 chunk = xyz / map.voxel_count_in_chunk;
 	int chunk_offset = chunk.x + chunk.y * map.chunk_count + chunk.z * map.chunk_count * map.chunk_count;
+	
+	// todo:we dont want this if we are only reading
 	map.nodes[chunk_offset].has_children() = 1;
 
 

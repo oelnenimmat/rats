@@ -19,12 +19,18 @@ struct Slice
 		return _data[index];
 	}
 
-	const T * begin() { return _data; }
-	const T * end() { return _data + _length; }
+	T const * begin() const { return _data; }
+	T const * end() const { return _data + _length; }
 
 	size_t length() const { return _length; }
 	size_t memory_size() const { return _length * sizeof(T); }
 	T * get_memory_ptr() const { return _data; }
+
+	void dispose()
+	{
+		_length = 0;
+		_data = nullptr;
+	}
 
 private:
 	size_t _length;

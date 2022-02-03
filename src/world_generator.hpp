@@ -1,34 +1,49 @@
+#pragma once
 
-// Move to "world generator hpp" or similar
-
+#include "math.hpp"
 #include "Noise.hpp"
 #include "Gradient.hpp"
 #include "WorldSettings.hpp"
 #include "DebugTerrain.hpp"
 #include "VoxelRenderer.hpp"
 
-void generate_test_world_for_chunktree(
+#include <thread>
+#include <atomic>
+
+void generate_test_world(
 	VoxelRenderer & renderer, 
 	DebugTerrain const & terrain,
 	NoiseSettings const & noise_settings,
-	WorldSettings const & world_settings
+	WorldSettings const & world_settings,
+	VoxelSettings const & voxel_settings,
+	float * const progress
 )
 {
 	Noise2D noise 				= make_noise(noise_settings);
 	auto color_hash 			= SmallXXHash::seed(32);
 
-	int voxel_count_in_map 	= renderer.chunk_map.chunk_count * renderer.chunk_map.voxel_count_in_chunk;
-	float VS_to_WS 			= world_settings.world_size / voxel_count_in_map;
+	float VS_to_WS = voxel_settings.VS_to_WS();
+	float WS_to_VS = voxel_settings.WS_to_VS();
 
-	for (int z = 0; z < voxel_count_in_map; z++)
+	// float chunk_count_per_dimension = world_settings.world_size * voxel_settings.WS_to_CS();
+	// int voxel_count_per_dimension = chunk_count_per_dimension * voxel_settings.voxels_in_chunk;
+
+	int voxel_count_per_dimension = rats::min(
+		(int)std::floor(world_settings.world_size * WS_to_VS),
+		voxel_settings.chunks_in_world * voxel_settings.voxels_in_chunk
+	);
+
+	std::cout << "[WORLD]: voxel_count_per_dimension = " << voxel_count_per_dimension << "\n";
+
+	for (int z = 0; z < voxel_count_per_dimension; z++)
 	{
-		for (int x = 0; x < voxel_count_in_map; x++)
+		for (int x = 0; x < voxel_count_per_dimension; x++)
 		{
 			// Add 0.5 to move to center of voxel. y doesn't matter, it is set later
 			float3 world_position 		= float3(x + 0.5, 0,z + 0.5) * VS_to_WS;
 
 			float height 				= terrain.get_height(world_position.xz);
-			int vertical_voxel_count 	= rats::max(1, (int)std::floor(height / VS_to_WS));
+			int vertical_voxel_count 	= rats::max(1, (int)std::floor(height * WS_to_VS));
 
 			for (int y = 0; y < vertical_voxel_count; y++)
 			{
@@ -64,7 +79,7 @@ void generate_test_world_for_chunktree(
 						normal += float3(-1, 0, 0);
 					}
 
-					if (x == voxel_count_in_map - 1)
+					if (x == voxel_count_per_dimension - 1)
 					{
 						normal += float3(1,0,0);
 					}
@@ -74,7 +89,7 @@ void generate_test_world_for_chunktree(
 						normal += float3(0,0,-1);
 					}
 
-					if (z == voxel_count_in_map - 1)
+					if (z == voxel_count_per_dimension - 1)
 					{
 						normal += float3(0,0,1);
 					}
@@ -86,7 +101,7 @@ void generate_test_world_for_chunktree(
 				}
 				normal = normalize(normal);
 
-				ChunkMapNode & node = get_node(renderer.chunk_map, x,y,z);
+				VoxelData & node = get_node(renderer.chunk_map, x,y,z);
 				node.material() = 1;
 
 				// world_position.y = y * VS_to_WS;
@@ -107,17 +122,30 @@ void generate_test_world_for_chunktree(
 				node.color = float4(color, 1);
 				node.normal() = normal;
 			}
+
+
+			{
+				float done = z * voxel_count_per_dimension +  x;
+				*progress = done / (voxel_count_per_dimension * voxel_count_per_dimension);
+			}
 		}
 	}
 }
 
-void generate_test_world(
+void generate_test_world_in_thread(
 	VoxelRenderer & renderer, 
 	DebugTerrain const & terrain,
 	NoiseSettings const & noise_settings,
 	WorldSettings const & world_settings,
-	DrawOptions const & draw_options
+	VoxelSettings const & voxel_settings,
+	float * const progress
 )
 {
-	generate_test_world_for_chunktree(renderer, terrain, noise_settings, world_settings);
+	*progress = 0;
+	auto thread = std::thread([&, progress]()
+	{
+		generate_test_world(renderer, terrain, noise_settings, world_settings, voxel_settings, progress);
+		*progress = 1;
+	});
+	thread.detach();
 }

@@ -2,34 +2,69 @@
 
 struct VoxelSettings
 {
-	int character_octree_depth  = 6;
-	int rat_octree_depth 		= 6;
-	int draw_octree_depth 		= 6;
+	float units_in_chunk = 20.0f / 16.0f;
+	int voxels_in_chunk 			= 8;
+
+	int chunks_in_world 			= 16;
+
+	// Design choice: for now voxels are always cubes. May change.
+
+	float CS_to_VS() const { return voxels_in_chunk; }
+	float VS_to_CS() const { return 1.0f / voxels_in_chunk; }
+
+	float CS_to_WS() const { return units_in_chunk; }
+	float WS_to_CS() const { return 1.0f / units_in_chunk; }
+
+	float VS_to_WS() const { return VS_to_CS() * CS_to_WS(); }
+	float WS_to_VS() const { return WS_to_CS() * CS_to_VS(); }
+
+	int total_chunk_count()
+	{
+		return chunks_in_world * chunks_in_world * chunks_in_world;
+	}
+
+	int total_voxel_count_in_chunk()
+	{
+		return voxels_in_chunk * voxels_in_chunk * voxels_in_chunk;
+	}
+
+	int total_voxel_count_in_world()
+	{
+		return total_chunk_count() * total_voxel_count_in_chunk();
+	}
 };
 
 inline SERIALIZE_STRUCT(VoxelSettings const & voxel_settings)
 {
-	serializer.write("character_octree_depth", voxel_settings.character_octree_depth);
-	serializer.write("rat_octree_depth", voxel_settings.rat_octree_depth);
-	serializer.write("draw_octree_depth", voxel_settings.draw_octree_depth);
 }
 
 inline DESERIALIZE_STRUCT(VoxelSettings & voxel_settings)
 {
-	serializer.read("character_octree_depth", voxel_settings.character_octree_depth);
-	serializer.read("rat_octree_depth", voxel_settings.rat_octree_depth);
-	serializer.read("draw_octree_depth", voxel_settings.draw_octree_depth);
 }
 
 namespace gui
 {
-	inline bool edit(VoxelSettings & v)
+	inline bool edit(VoxelSettings & voxel_settings)
 	{
-		auto helper = gui_helper();
-		helper.edit("character_octree_depth", v.character_octree_depth);
-		helper.edit("rat_octree_depth", v.rat_octree_depth);
-		helper.edit("draw_octree_depth", v.draw_octree_depth);
-		return helper.dirty;
+		auto gui = gui_helper();
+		gui.edit("units_in_chunk", voxel_settings.units_in_chunk);
+		gui.edit("chunks_in_world", voxel_settings.chunks_in_world);
+		gui.edit("voxels_in_chunk", voxel_settings.voxels_in_chunk);
+		
+		Indent();
+			PushStyleColor(ImGuiCol_Text, ImVec4(0.9, 0.3,0.5,1.0));
+
+			Value("CS_to_VS", voxel_settings.CS_to_VS());
+			Value("VS_to_CS", voxel_settings.VS_to_CS());
+			Value("CS_to_WS", voxel_settings.CS_to_WS());
+			Value("WS_to_CS", voxel_settings.WS_to_CS());
+			Value("VS_to_WS", voxel_settings.VS_to_WS());
+			Value("WS_to_VS", voxel_settings.WS_to_VS());
+
+			PopStyleColor();
+		Unindent();
+
+		return gui.dirty;
 	}
 }
 
@@ -45,7 +80,7 @@ enum struct ComputeShaderDrawMode : int
 
 enum struct ComputeShaderDrawMethod : int
 {
-	chunktree = 0,
+	chunk_map = 0,
 
 	COUNT
 };
@@ -68,7 +103,7 @@ namespace gui
 	{
 		constexpr char const * c_strings [] =
 		{
-			"chunktree",
+			"chunk_map",
 		};
 		int * value = reinterpret_cast<int*>(&m);
 		return Combo(label, value, c_strings, (int)ComputeShaderDrawMethod::COUNT);

@@ -42,24 +42,35 @@ void update_statistics(Statistics & s, float unscaled_delta_time)
 
 struct Timings
 {
-	MeanBuffer<float, 20> draw_to_octree;
-	MeanBuffer<float, 20> setup_draw_buffers;
-	MeanBuffer<float, 20> graphics_begin_frame;
-	MeanBuffer<float, 20> copy_to_graphics;
-	MeanBuffer<float, 20> graphics_draw_frame;
+	using TimeBuffer = MeanBuffer<float, 20>;
 
-	MeanBuffer<float, 20> begin_frame;
-	MeanBuffer<float, 20> engine_gui;
-	MeanBuffer<float, 20> update_engine;
-	MeanBuffer<float, 20> render_engine;
-	MeanBuffer<float, 20> end_frame;
+	// drawing
+	TimeBuffer prepare_frame;
+	TimeBuffer draw_character;
+	TimeBuffer draw_mouses;
+	TimeBuffer draw_grass;
 
-	MeanBuffer<float, 20> graphics_acquire_image;
-	MeanBuffer<float, 20> graphics_run_compute;
-	MeanBuffer<float, 20> graphics_blit;
-	MeanBuffer<float, 20> graphics_imgui;
-	MeanBuffer<float, 20> graphics_submit;
-	MeanBuffer<float, 20> graphics_present;
+	// render
+	TimeBuffer draw_to_octree;
+	TimeBuffer setup_draw_buffers;
+	TimeBuffer graphics_begin_frame;
+	TimeBuffer copy_to_graphics;
+	TimeBuffer graphics_draw_frame;
+
+	// loop
+	TimeBuffer begin_frame;
+	TimeBuffer engine_gui;
+	TimeBuffer update_engine;
+	TimeBuffer render_engine;
+	TimeBuffer end_frame;
+
+	// grpahics
+	TimeBuffer graphics_acquire_image;
+	TimeBuffer graphics_run_compute;
+	TimeBuffer graphics_blit;
+	TimeBuffer graphics_imgui;
+	TimeBuffer graphics_submit;
+	TimeBuffer graphics_present;
 };
 
 #define TIMER_BEGIN(name) auto sw_##name = Stopwatch::start_new()
@@ -86,6 +97,16 @@ namespace gui
 			Indent();
 				PushStyleColor(ImGuiCol_Text, ImVec4(0.9, 0.9,0.1,1.0));
 				Value("draw_to_octree", timings.draw_to_octree.mean_value);
+
+				Indent();
+					PushStyleColor(ImGuiCol_Text, ImVec4(0.3, 0.5, 0.9, 1.0));
+					Value("prepare_frame", timings.prepare_frame.mean_value);
+					Value("draw_character", timings.draw_character.mean_value);
+					Value("draw_mouses", timings.draw_mouses.mean_value);
+					Value("draw_grass", timings.draw_grass.mean_value);
+					PopStyleColor();
+				Unindent();
+
 				Value("setup_draw_buffers", timings.setup_draw_buffers.mean_value);
 				Value("graphics_begin_frame", timings.graphics_begin_frame.mean_value);
 				Value("copy_to_graphics", timings.copy_to_graphics.mean_value);

@@ -86,13 +86,15 @@ struct Engine
 	MouseState mouses [200] = {};
 	Gradient mouse_colors;
 
-	int octree_buffer_handle;
-	int octree_info_buffer_handle;
+	int voxel_data_buffer_handle;
+	int voxel_info_buffer_handle;
 	int camera_buffer_handle;
 	int lighting_buffer_handle;
 
 	static constexpr char const * save_filenme = "data/engine.json";
 	static constexpr char const * style_filename = "data/imgui_style.json";
+
+	float world_generation_progress;
 };
 
 inline SERIALIZE_STRUCT(Engine const & engine)

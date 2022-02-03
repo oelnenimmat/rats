@@ -35,7 +35,7 @@ GraphicsTiming graphics_get_timing(Graphics * graphics);
 
 enum struct GraphicsBufferType
 {
-	compute,
+	storage,
 	uniform
 };
 

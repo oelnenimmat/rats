@@ -6,7 +6,8 @@
 #include "ChunkMap.hpp"
 #include "loop.hpp"
 
-struct ChunkMapNode
+// Packed datastructure for compute shader
+struct VoxelData
 {
 	float4 color;
 	float4 normal_xyz;
@@ -19,22 +20,47 @@ struct ChunkMapNode
 	int & has_children() { return material_child_offset.z; }
 };
 
+// Packed datastructure for compute shader
 struct VoxelWorldInfo
 {
-	int4 max_depth_and_stuff;
 	float4 world_min;
 	float4 world_max;
+	float4 space_transforms;			// x: WS_to_VS, y: VS_to_WS, z: WS_to_CS, w: CS_to_WS
+	int4 chunk_and_voxel_dimensions; 	// xyz: chunks in world, w: voxels in chunk
 
-	int & max_depth() { return max_depth_and_stuff.x; }
+	float & WS_to_VS() { return space_transforms.x; }
+	float & VS_to_WS() { return space_transforms.y; }
+	float & WS_to_CS() { return space_transforms.z; }
+	float & CS_to_WS() { return space_transforms.w; }
+	int3 & chunk_dimensions() { return chunk_and_voxel_dimensions.xyz; }
+	int & voxel_dimensions() { return chunk_and_voxel_dimensions.w; }
 };
 
 struct VoxelRenderer
 {
-	ChunkMap<ChunkMapNode> chunk_map;
-	ChunkMap<ChunkMapNode> temp_chunk_map;
+	ChunkMap<VoxelData> chunk_map;
+	ChunkMap<VoxelData> temp_chunk_map;
 
 	WorldSettings * world_settings;
 	DrawOptions * draw_options;
+
+	VoxelWorldInfo get_voxel_world_info()
+	{
+		VoxelWorldInfo voxel_world_info = {};
+
+		voxel_world_info.world_min.xyz 	= float3(0,0,0);
+		voxel_world_info.world_max.xyz 	= float3(world_settings->world_size);
+
+		voxel_world_info.WS_to_VS() 	= draw_options->voxel_settings.WS_to_VS();
+		voxel_world_info.VS_to_WS() 	= draw_options->voxel_settings.VS_to_WS();
+		voxel_world_info.WS_to_CS() 	= draw_options->voxel_settings.WS_to_CS();
+		voxel_world_info.CS_to_WS() 	= draw_options->voxel_settings.CS_to_WS();
+
+		voxel_world_info.chunk_dimensions() = int3(draw_options->voxel_settings.chunks_in_world);
+		voxel_world_info.voxel_dimensions() = draw_options->voxel_settings.voxels_in_chunk;
+
+		return voxel_world_info;
+	}
 };
 
 void init(VoxelRenderer & renderer, WorldSettings * world_settings, DrawOptions * draw_options)
@@ -55,10 +81,11 @@ void prepare_frame(VoxelRenderer & renderer, Allocator & temp_allocator)
 	copy_slice_data(renderer.temp_chunk_map.nodes, renderer.chunk_map.nodes);
 }
 
-void draw_cuboid_for_chunktree(VoxelRenderer & renderer, float3 position_WS, float size, float3 color)
+void draw_cuboid(VoxelRenderer & renderer, float3 position_WS, float size, float3 color)
 {	
-	int voxel_count_in_world = renderer.chunk_map.voxel_count_in_chunk * renderer.chunk_map.chunk_count;
-	float WS_to_VS =  (float)voxel_count_in_world/ renderer.world_settings->world_size;
+	// int voxel_count_in_world = renderer.chunk_map.voxel_count_in_chunk * renderer.chunk_map.chunk_count;
+	// float WS_to_VS =  (float)voxel_count_in_world/ renderer.world_settings->world_size;
+	float WS_to_VS = renderer.draw_options->voxel_settings.WS_to_VS();
 
 
 	// thing is currently a cuboid
@@ -81,7 +108,7 @@ void draw_cuboid_for_chunktree(VoxelRenderer & renderer, float3 position_WS, flo
 			y += start_VS.y;
 			z += start_VS.z;
 
-			ChunkMapNode & node = get_node(renderer.temp_chunk_map, x,y,z);
+			VoxelData & node = get_node(renderer.temp_chunk_map, x,y,z);
 			node.material() = 1;
 
 			float3 normal = position_OS;
@@ -92,10 +119,4 @@ void draw_cuboid_for_chunktree(VoxelRenderer & renderer, float3 position_WS, flo
 			
 		}
 	});
-}
-
-
-void draw_cuboid(VoxelRenderer & renderer, float3 position_WS, int depth, float size, float3 color)
-{
-	draw_cuboid_for_chunktree(renderer, position_WS, size, color);
 }

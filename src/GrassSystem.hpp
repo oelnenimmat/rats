@@ -222,7 +222,7 @@ void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 worl
 		return;
 	}
 
-	float3 WS_to_VS = float3(renderer.chunk_map.chunk_count * renderer.chunk_map.voxel_count_in_chunk) / world_size;
+	float WS_to_VS = renderer.draw_options->voxel_settings.WS_to_VS();
 
 	for (int i = 0; i < grass.roots.length(); i++)
 	{
@@ -246,8 +246,10 @@ void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 worl
 		float step_z = lengths.z / steps;
 
 		auto hash = SmallXXHash::seed(i);
-		float color_t = hash.get_float_A_01();
+		float color_t = hash.get_float_B_01();
 		float4 color = grass.settings->colors.evaluate(color_t);
+
+		float3 normal = normalize(grass.tips[i]);
 
 		for (int y = 0; y < steps; y++)
 		{
@@ -265,10 +267,12 @@ void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 worl
 				z + start_VS.z
 			);
 			node.material() = 2;
+			node.normal() = normal;
 			node.color = color;
 		}
 
-		if (hash.get_float_B_01() < grass.settings->flower_probability)
+		// this is same that is used for height, and thus longest grass have flowers
+		if ((1.0 - hash.get_float_A_01()) < grass.settings->flower_probability)
 		{
 			float4 flower_color = grass.settings->flower_colors.evaluate(color_t);
 
@@ -288,6 +292,7 @@ void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 worl
 				z + start_VS.z
 			);
 			node.material() = 2;
+			node.normal() = normal;
 			node.color = flower_color;
 		}
 	}

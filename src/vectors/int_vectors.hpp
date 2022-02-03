@@ -59,6 +59,7 @@ union alignas(16) int4
 {
 	// Data contents
 	struct { int x, y, z, w; };
+	struct { int3 xyz; int ignored_w; };
 	int values[4];
 
 	// Bascic constructors

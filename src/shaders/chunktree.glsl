@@ -6,51 +6,38 @@
 #include "voxel_data.glsl"
 
 
-const int chunk_count = 16;
-const int chunk_count_3d = chunk_count * chunk_count * chunk_count;
-const int voxel_count_in_chunk = 8;
-
 bool chunk_is_empty(const ivec3 voxel)
 {
-	ivec3 chunk = voxel / voxel_count_in_chunk;
-	int chunk_offset = 	chunk.x + 
-						chunk.y * chunk_count +
-						chunk.z * chunk_count * chunk_count;
+	ivec3 chunk 	= voxel / get_voxels_in_chunk();
+	int chunk_index = get_chunk_index(chunk);
 
-	if (voxels.data[chunk_offset].material_child_offset.z == 0)
+	if (voxel_data[chunk_index].material_child_offset.z == 0)
 	{
 		return true;
-	}		
+	}
+
+	// bool inside = all(greaterThanEqual(voxel, ivec3(0,0,0)), lessThan(voxel, get_chun))
 	return false;
 }
 
 VoxelData get_chunktree_voxel(const ivec3 voxel)
 {
+	int voxels_in_chunk = get_voxels_in_chunk();
 
-	ivec3 chunk = voxel / voxel_count_in_chunk;
-	ivec3 voxel_2 = voxel % voxel_count_in_chunk;
+	int chunk_index = get_chunk_index(voxel / voxels_in_chunk);
+	int voxel_index = get_voxel_index(voxel % voxels_in_chunk);
 
-	int chunk_offset = 	chunk.x + 
-						chunk.y * chunk_count +
-						chunk.z * chunk_count * chunk_count;
+	int data_index = get_voxel_data_start() 
+					+ chunk_index * voxels_in_chunk * voxels_in_chunk * voxels_in_chunk
+					+ voxel_index;
 
-	int voxel_offset = 	voxel_2.x + 
-						voxel_2.y * voxel_count_in_chunk +
-						voxel_2.z * voxel_count_in_chunk * voxel_count_in_chunk;
-
-	int index = chunk_count_3d + chunk_offset * voxel_count_in_chunk * voxel_count_in_chunk * voxel_count_in_chunk + voxel_offset;
-
-	return voxels.data[index];
+	return voxel_data[data_index];
 }
 
 vec4 traverse_chunktree_lights(const Ray ray, float max_distance)
 {
-	vec3 world_max = get_world_size();
-
-	// int max_octree_depth = get_max_sample_depth();
-
-	ivec3 voxels_in_chunk = ivec3(voxel_count_in_chunk,voxel_count_in_chunk,voxel_count_in_chunk);
-	ivec3 chunks_in_world = ivec3(chunk_count,chunk_count,chunk_count);
+	ivec3 voxels_in_chunk = ivec3(get_voxels_in_chunk());
+	ivec3 chunks_in_world = get_chunks_in_world();
 	ivec3 voxels_in_world = voxels_in_chunk * chunks_in_world;
 
 	float t_start = 0;
@@ -63,20 +50,14 @@ vec4 traverse_chunktree_lights(const Ray ray, float max_distance)
 
 	color.rgb = light;
 
-
 	// this means we are totally outside of defined regions, we can quit
-	if (raycast(ray, world_min, world_max, max_distance + 1, t_start) == false)
+	if (raycast(ray, world_min, get_render_bounds(), max_distance + 1, t_start) == false)
 	{
-
 		return color;
-		// return vec4(0,0,0,0);
 	}
 
-	// We don't use this, but it helps to word out where VS_to_WS and WS_to_VS come from
-	vec3 voxels_inside_world_unit = vec3(voxels_in_world) / world_max;
-
-	vec3 VS_to_WS = vec3(1,1,1) / voxels_inside_world_unit;  //voxel_info.VS_to_WS.xyz;
-	vec3 WS_to_VS = voxels_inside_world_unit;  //voxel_info.WS_to_VS.xyz;
+	vec3 VS_to_WS = vec3(get_VS_to_WS());
+	vec3 WS_to_VS = vec3(get_WS_to_VS());
 
 	// Use skinwidth to move just inside the first voxel, so we do not
 	// waste time getting out of bounds voxels
@@ -85,11 +66,7 @@ vec4 traverse_chunktree_lights(const Ray ray, float max_distance)
 	const vec3 direction_WS = ray.direction;
 
 	// VS = Voxel Space, where there is one voxel per unit
-	// const vec3 start_VS 	= start_WS * WS_to_VS;
 	const vec3 direction_VS = normalize(ray.direction * WS_to_VS);
-
-	// Integer voxel coordinates
-	// ivec3 voxel = ivec3(floor(start_VS));
 
 	// Direction of step to take in each dimension when moving to next voxel
 	const ivec3 dir = ivec3(sign(direction_VS));
@@ -128,12 +105,13 @@ vec4 traverse_chunktree_lights(const Ray ray, float max_distance)
 
 		if (chunk_is_empty(voxel))
 		{
+
 			// CS = Chunk Space
-			float WS_to_CS 								= chunk_count / get_world_size().x;
+			float WS_to_CS 								= get_WS_to_CS();
 			vec3 position_CS 							= position_WS * WS_to_CS;
 			vec3 t_max_CS 								= (step(0, direction_VS) - fract(position_CS)) / direction_VS;
 			float t_max_min_CS 							= min(min(t_max_CS.x, t_max_CS.y), t_max_CS.z);
-			float distance_to_move_in_this_chunk_WS 	= t_max_min_CS / WS_to_CS;//CS_to_WS;
+			float distance_to_move_in_this_chunk_WS 	= t_max_min_CS * get_CS_to_WS();
 
 			t_WS += distance_to_move_in_this_chunk_WS + skinwidth;
 
@@ -148,7 +126,10 @@ vec4 traverse_chunktree_lights(const Ray ray, float max_distance)
 		{
 			if (material == 2)
 			{
-				color = vec4(data.color.xyz, 1);
+				vec3 direct_diffuse = (1.0 - max(0, dot(data.normal.xyz, -lighting.direct_direction.xyz))) * lighting.direct_color.rgb;
+				vec3 gi_diffuse 	= lighting.ambient_color.rgb;
+				vec3 light 			= direct_diffuse + gi_diffuse;
+				color 				= vec4(data.color.xyz * light, 1);
 			}
 			else
 			{
@@ -162,8 +143,9 @@ vec4 traverse_chunktree_lights(const Ray ray, float max_distance)
 		}
 
 		vec3 t_max_VS 								= (step(0, direction_VS) - fract(position_VS)) / direction_VS;
-		float t_max_min_VS 							= min(min(t_max_VS.x, t_max_VS.y), t_max_VS.z);
-		float distance_to_move_in_this_voxel_WS 	= t_max_min_VS * VS_to_WS.x; // LOL THIS MEANS ONLY CUBIC GRID WORKS NOW
+		vec3 t_max_WS 								= t_max_VS * VS_to_WS;
+		float t_max_min_WS 							= min(min(t_max_WS.x, t_max_WS.y), t_max_WS.z);
+		float distance_to_move_in_this_voxel_WS 	= t_max_min_WS;
 
 		t_WS += distance_to_move_in_this_voxel_WS + skinwidth;
 	}
@@ -173,33 +155,25 @@ vec4 traverse_chunktree_lights(const Ray ray, float max_distance)
 
 vec4 traverse_chunktree(const Ray ray, float max_distance)
 {
-	vec3 world_max = get_world_size();
-
-	// this is kinda unnecessary for the algorithm, but it provides a way to 
-	// do less stuff if wanted
-	// int max_octree_depth = get_max_sample_depth();
-
 	ivec3 voxels_in_chunk = ivec3(
-		voxel_count_in_chunk,
-		voxel_count_in_chunk,
-		voxel_count_in_chunk
+		get_voxels_in_chunk(),
+		get_voxels_in_chunk(),
+		get_voxels_in_chunk()
 	);
-	ivec3 chunks_in_world = ivec3(chunk_count, chunk_count, chunk_count);
+	ivec3 chunks_in_world = get_chunks_in_world();
 	ivec3 voxels_in_world = voxels_in_chunk * chunks_in_world;
 
 	float t_start;
 
 	// this means we are totally outside of defined regions, we can quit
-	if (raycast(ray, world_min, world_max, max_distance + 1, t_start) == false)
+	if (raycast(ray, world_min, get_render_bounds(), max_distance + 1, t_start) == false)
 	{
 		return vec4(0,0,0,0);
 	}
 
-	// We don't use this, but it helps to word out where VS_to_WS and WS_to_VS come from
-	vec3 voxels_inside_world_unit = vec3(voxels_in_world) / world_max;
 
-	vec3 VS_to_WS = vec3(1,1,1) / voxels_inside_world_unit;
-	vec3 WS_to_VS = voxels_inside_world_unit;
+	vec3 VS_to_WS = vec3(get_VS_to_WS());
+	vec3 WS_to_VS = vec3(get_WS_to_VS());
 
 	// Use skinwidth to move just inside the first voxel, so we do not
 	// waste time getting out of bounds voxels
@@ -208,11 +182,7 @@ vec4 traverse_chunktree(const Ray ray, float max_distance)
 	const vec3 direction_WS = ray.direction;
 
 	// VS = Voxel Space, where there is one voxel per unit
-	// const vec3 start_VS 	= start_WS * WS_to_VS;
 	const vec3 direction_VS = normalize(ray.direction * WS_to_VS);
-
-	// Integer voxel coordinates
-	// ivec3 voxel = ivec3(floor(start_VS));
 
 	// Direction of step to take in each dimension when moving to next voxel
 	const ivec3 dir = ivec3(sign(direction_VS));
@@ -247,11 +217,12 @@ vec4 traverse_chunktree(const Ray ray, float max_distance)
 		if (chunk_is_empty(voxel))
 		{
 			// CS = Chunk Space
-			float WS_to_CS 								= chunk_count / get_world_size().x;
+			float WS_to_CS 								= get_WS_to_CS();
 			vec3 position_CS 							= position_WS * WS_to_CS;
 			vec3 t_max_CS 								= (step(0, direction_VS) - fract(position_CS)) / direction_VS;
-			float t_max_min_CS 							= min(min(t_max_CS.x, t_max_CS.y), t_max_CS.z);
-			float distance_to_move_in_this_chunk_WS 	= t_max_min_CS / WS_to_CS;//CS_to_WS;
+			vec3 t_max_WS 								= t_max_CS * get_CS_to_WS();
+			float t_max_min_WS 							= min(min(t_max_WS.x, t_max_WS.y), t_max_WS.z);
+			float distance_to_move_in_this_chunk_WS 	= t_max_min_WS;
 
 			t_WS += distance_to_move_in_this_chunk_WS + skinwidth;
 
@@ -310,16 +281,10 @@ vec4 traverse_chunktree(const Ray ray, float max_distance)
 			break;
 		}
 
-		// Compute distance to move in local depth space, depth as in octree depth, so we 
-		// know how big steps we must take to skip big empty voxels
-		// Cubic grid only now :(
-		// int LS_to_VS 		= 1 << (max_octree_depth - local_depth);
-		// vec3 position_LS 	= position_VS / LS_to_VS;
-		// vec3 direction_LS 	= direction_VS;
-
 		vec3 t_max_VS 								= (step(0, direction_VS) - fract(position_VS)) / direction_VS;
-		float t_max_min_VS 							= min(min(t_max_VS.x, t_max_VS.y), t_max_VS.z);
-		float distance_to_move_in_this_voxel_WS 	= t_max_min_VS * VS_to_WS.x;
+		vec3 t_max_WS 								= t_max_VS * VS_to_WS;
+		float t_max_min_WS 							= min(min(t_max_WS.x, t_max_WS.y), t_max_WS.z);
+		float distance_to_move_in_this_voxel_WS 	= t_max_min_WS;
 
 		t_WS += distance_to_move_in_this_voxel_WS + skinwidth;
 	}

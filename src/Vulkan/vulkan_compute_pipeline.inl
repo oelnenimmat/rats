@@ -60,7 +60,7 @@ namespace
 	{
 		switch(type)
 		{
-			case GraphicsBufferType::compute: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			case GraphicsBufferType::storage: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 			case GraphicsBufferType::uniform: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		};
 

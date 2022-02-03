@@ -37,11 +37,12 @@ struct CameraData
 	DrawOptionsGpuData draw_options;
 };
 
-// Note(Leo): defines in compute.comp must match the order of these
+// Note(Leo): defines in compute.comp must match the order of these, they define the pipeline layout
 enum GraphicsPerFrameBufferNames : int
 {
-	voxel_octree_buffer,
-	voxel_octree_info_buffer,
+	voxel_data_buffer,
+
+	voxel_info_buffer,
 	camera_buffer,
 	lighting_buffer,
 
@@ -195,8 +196,8 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 	// -----------------------------------------------------------------
 
 	GraphicsBufferType buffer_types [per_frame_buffer_count];
-	buffer_types[voxel_octree_buffer] 		= GraphicsBufferType::compute;
-	buffer_types[voxel_octree_info_buffer] 	= GraphicsBufferType::uniform;
+	buffer_types[voxel_data_buffer] 		= GraphicsBufferType::storage;
+	buffer_types[voxel_info_buffer] 		= GraphicsBufferType::uniform;
 	buffer_types[camera_buffer] 			= GraphicsBufferType::uniform;
 	buffer_types[lighting_buffer] 			= GraphicsBufferType::uniform;
 
@@ -209,44 +210,22 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 
 	// -------------------------------------------------------------------------------------------------
 
-	int chunk_count = 16;
-	int voxel_count_in_chunk = 8;
-
-	int total_chunk_count = chunk_count * chunk_count * chunk_count;
-	int total_voxel_count = total_chunk_count * voxel_count_in_chunk * voxel_count_in_chunk * voxel_count_in_chunk;
-	int total_element_count = total_chunk_count + total_voxel_count;
-
-	size_t voxel_buffer_memory_size = total_element_count * sizeof(ChunkMapNode);
-
-	engine.octree_buffer_handle 		= graphics_create_buffer(graphics, voxel_buffer_memory_size, GraphicsBufferType::compute);
-	engine.octree_info_buffer_handle 	= graphics_create_buffer(graphics, sizeof(VoxelWorldInfo), GraphicsBufferType::uniform);
+	// These are fixed size
+	// handles are refernces to buffers on graphics
+	engine.voxel_info_buffer_handle 	= graphics_create_buffer(graphics, sizeof(VoxelWorldInfo), GraphicsBufferType::uniform);
 	engine.camera_buffer_handle 		= graphics_create_buffer(graphics, sizeof(CameraData), GraphicsBufferType::uniform);
 	engine.lighting_buffer_handle 		= graphics_create_buffer(graphics, sizeof(LightData), GraphicsBufferType::uniform);
 
-	graphics_bind_buffer(graphics, engine.octree_buffer_handle, voxel_octree_buffer, GraphicsBufferType::compute);
-	graphics_bind_buffer(graphics, engine.octree_info_buffer_handle, voxel_octree_info_buffer, GraphicsBufferType::uniform);
+	// non handles are integers that match the compute pipeline layout
+	graphics_bind_buffer(graphics, engine.voxel_info_buffer_handle, voxel_info_buffer, GraphicsBufferType::uniform);
 	graphics_bind_buffer(graphics, engine.camera_buffer_handle, camera_buffer, GraphicsBufferType::uniform);
 	graphics_bind_buffer(graphics, engine.lighting_buffer_handle, lighting_buffer, GraphicsBufferType::uniform);
 
-	init(engine.renderer.chunk_map, global_debug_allocator, chunk_count, voxel_count_in_chunk);
-	
 
-	init(
-		engine.renderer.temp_chunk_map,
-		reinterpret_cast<ChunkMapNode*>(graphics_buffer_get_writeable_memory(graphics, engine.octree_buffer_handle)),
-		chunk_count,
-		voxel_count_in_chunk
-	);
+	engine.voxel_data_buffer_handle = graphics_create_buffer(graphics, 0, GraphicsBufferType::storage);
+	graphics_bind_buffer(graphics, engine.voxel_data_buffer_handle, voxel_data_buffer, GraphicsBufferType::storage);
 
-	generate_test_world(
-		engine.renderer,
-		engine.debug_terrain,
-		engine.noise_settings,
-		engine.world_settings,
-		engine.draw_options
-	);
-
-
+	engine.events.recreate_world = true;
 }
 
 void update_engine(Engine & engine)
@@ -259,28 +238,43 @@ void update_engine(Engine & engine)
 
 	if (engine.events.recreate_world)
 	{
-		MY_ENGINE_WARNING(false, "No world recreation implemented now");
+		// this is dynamic size
+		int chunk_count 			= engine.draw_options.voxel_settings.chunks_in_world;
+		int voxel_count_in_chunk 	= engine.draw_options.voxel_settings.voxels_in_chunk;
 
-		/*
+		int total_chunk_count 		= engine.draw_options.voxel_settings.total_chunk_count();
+		int total_voxel_count 		= engine.draw_options.voxel_settings.total_voxel_count_in_world();
+		int total_element_count 	= total_chunk_count + total_voxel_count;
+
+		size_t voxel_buffer_memory_size = total_element_count * sizeof(VoxelData);
+
+		graphics_destroy_buffer(graphics, engine.voxel_data_buffer_handle);
+
+
+		engine.voxel_data_buffer_handle = graphics_create_buffer(graphics, voxel_buffer_memory_size, GraphicsBufferType::storage);
+		graphics_bind_buffer(graphics, engine.voxel_data_buffer_handle, voxel_data_buffer, GraphicsBufferType::storage);
+
+		// todo: dont do this, we only want to recreate world, not the renderer
+		engine.renderer.chunk_map.dispose();
+		engine.renderer.temp_chunk_map.dispose();
 		engine.voxel_allocator.reset();
-		engine.renderer.octree.dispose();
-		engine.renderer.octree.init(
-			engine.draw_options.voxel_settings.draw_octree_depth,
-			engine.voxel_allocator
+
+		init(engine.renderer.chunk_map, engine.voxel_allocator, chunk_count, voxel_count_in_chunk);
+		init(
+			engine.renderer.temp_chunk_map,
+			reinterpret_cast<VoxelData*>(graphics_buffer_get_writeable_memory(graphics, engine.voxel_data_buffer_handle)),
+			chunk_count,
+			voxel_count_in_chunk
 		);
 
-		graphics_destroy_buffer(graphics, engine.octree_buffer_handle);
-		engine.octree_buffer_handle = graphics_create_buffer(graphics, engine.renderer.chunk_map.nodes.memory_size(), GraphicsBufferType::compute);
-		graphics_bind_buffer(graphics, engine.octree_buffer_handle, voxel_octree_buffer, GraphicsBufferType::compute);
-
-		generate_test_world(
+		generate_test_world_in_thread(
 			engine.renderer,
 			engine.debug_terrain,
 			engine.noise_settings,
 			engine.world_settings,
-			engine.draw_options
+			engine.draw_options.voxel_settings,
+			&engine.world_generation_progress
 		);
-		*/
 	}
 
 	// ---------------------------------------------------------------------
@@ -303,8 +297,8 @@ void update_engine(Engine & engine)
 
 		// todo: this is replicated code, from initialize_engine
 		GraphicsBufferType buffer_types [per_frame_buffer_count];
-		buffer_types[voxel_octree_buffer] 		= GraphicsBufferType::compute;
-		buffer_types[voxel_octree_info_buffer] 	= GraphicsBufferType::uniform;
+		buffer_types[voxel_data_buffer] 		= GraphicsBufferType::storage;
+		buffer_types[voxel_info_buffer] 	= GraphicsBufferType::uniform;
 		buffer_types[camera_buffer] 			= GraphicsBufferType::uniform;
 		buffer_types[lighting_buffer] 			= GraphicsBufferType::uniform;
 
@@ -315,8 +309,8 @@ void update_engine(Engine & engine)
 		bool ok = graphics_create_compute_pipeline(graphics, &layout);
 		MINIMA_ASSERT(ok);
 
-		graphics_bind_buffer(graphics, engine.octree_buffer_handle, voxel_octree_buffer, GraphicsBufferType::compute);
-		graphics_bind_buffer(graphics, engine.octree_info_buffer_handle, voxel_octree_info_buffer, GraphicsBufferType::uniform);
+		graphics_bind_buffer(graphics, engine.voxel_data_buffer_handle, voxel_data_buffer, GraphicsBufferType::storage);
+		graphics_bind_buffer(graphics, engine.voxel_info_buffer_handle, voxel_info_buffer, GraphicsBufferType::uniform);
 		graphics_bind_buffer(graphics, engine.camera_buffer_handle, camera_buffer, GraphicsBufferType::uniform);
 		graphics_bind_buffer(graphics, engine.lighting_buffer_handle, lighting_buffer, GraphicsBufferType::uniform);
 
@@ -402,29 +396,23 @@ void render_engine(Engine & engine)
 
 		if (engine.paused == false)
 		{
-			prepare_frame(engine.renderer, engine.temp_allocator);
+			TIME_FUNCTION(prepare_frame(engine.renderer, engine.temp_allocator), engine.timings.prepare_frame);
 
-			draw_cuboid(
-				engine.renderer,
-				engine.character.position,
-				engine.draw_options.voxel_settings.character_octree_depth,
-				engine.character.size,
-				engine.character.color
+			TIME_FUNCTION(
+				draw_cuboid(engine.renderer, engine.character.position, engine.character.size, engine.character.color),
+				engine.timings.draw_character
 			);
 
+			TIMER_BEGIN(draw_mouses);
 			for (MouseState const & mouse : engine.mouses)
 			{
-				draw_cuboid(
-					engine.renderer,
-					mouse.position,
-					engine.draw_options.voxel_settings.rat_octree_depth,
-					0.125,
-					engine.mouse_colors.evaluate(mouse.hash.get_float_A_01()).rgb
-				);
+				float3 color = engine.mouse_colors.evaluate(mouse.hash.get_float_A_01()).rgb;
+				draw_cuboid(engine.renderer, mouse.position, 0.125, color);
 			}
+			TIMER_END(engine.timings, draw_mouses);
 
 			float3 world_size = float3(engine.world_settings.world_size);
-			draw_grass(engine.grass, engine.renderer, world_size);
+			TIME_FUNCTION(draw_grass(engine.grass, engine.renderer, world_size), engine.timings.draw_grass);
 		}
 
 	TIMER_END(engine.timings, draw_to_octree);
@@ -432,12 +420,8 @@ void render_engine(Engine & engine)
 
 	TIMER_BEGIN(setup_draw_buffers);
 
-		VoxelWorldInfo voxel_world_info = {};
-		voxel_world_info.max_depth() = engine.draw_options.voxel_settings.draw_octree_depth;
-		voxel_world_info.world_min.xyz = float3(0,0,0);
-		voxel_world_info.world_max.xyz = float3(engine.world_settings.world_size, engine.world_settings.world_size, engine.world_settings.world_size);
-
-		LightData light_data = engine.light_settings.get_light_data();
+		VoxelWorldInfo voxel_world_info = engine.renderer.get_voxel_world_info();
+		LightData light_data 			= engine.light_settings.get_light_data();
 		
 		CameraData camera_data;
 		camera_data.view_matrix = engine.camera_mode == CameraMode::editor ? engine.camera.view_matrix : engine.game_camera.view_matrix; 
@@ -448,9 +432,9 @@ void render_engine(Engine & engine)
 			0
 		);
 		camera_data.world_size = float4(
-			engine.world_settings.world_size,
-			0,
-			0,
+			engine.draw_options.voxel_settings.chunks_in_world * engine.draw_options.voxel_settings.CS_to_WS(),
+			engine.draw_options.voxel_settings.chunks_in_world * engine.draw_options.voxel_settings.CS_to_WS(),
+			engine.draw_options.voxel_settings.chunks_in_world * engine.draw_options.voxel_settings.CS_to_WS(),
 			0
 		);
 		camera_data.draw_options = engine.draw_options.get_gpu_data();
@@ -465,9 +449,9 @@ void render_engine(Engine & engine)
 		// Todo(Leo): this is still problematic, since we are not synced with rendering, and this might be updated from cpu
 		// (voxel renderer) while being copied to actual gpu buffer. Now it could be fixed by setting virtual frame
 		// count to 1, but i am not sure if I want to do that yet. It might be okay though.	
-		graphics_buffer_apply(graphics, engine.octree_buffer_handle);
+		graphics_buffer_apply(graphics, engine.voxel_data_buffer_handle);
 
-		graphics_write_buffer(graphics, engine.octree_info_buffer_handle, sizeof voxel_world_info, &voxel_world_info);
+		graphics_write_buffer(graphics, engine.voxel_info_buffer_handle, sizeof voxel_world_info, &voxel_world_info);
 		graphics_write_buffer(graphics, engine.camera_buffer_handle, sizeof camera_data, &camera_data);
 		graphics_write_buffer(graphics, engine.lighting_buffer_handle, sizeof light_data, &light_data);
 
@@ -497,8 +481,8 @@ void shutdown_engine(Engine & engine)
 {
 	Serializer::to_file(engine, Engine::save_filenme);
 
-	graphics_destroy_buffer(engine.graphics, engine.octree_buffer_handle);
-	graphics_destroy_buffer(engine.graphics, engine.octree_info_buffer_handle);
+	graphics_destroy_buffer(engine.graphics, engine.voxel_data_buffer_handle);
+	graphics_destroy_buffer(engine.graphics, engine.voxel_info_buffer_handle);
 	graphics_destroy_buffer(engine.graphics, engine.camera_buffer_handle);
 	graphics_destroy_buffer(engine.graphics, engine.lighting_buffer_handle);
 
@@ -509,9 +493,6 @@ void shutdown_engine(Engine & engine)
 
 void begin_frame(Engine & engine)
 {
-	engine.events = {};
-	engine.temp_allocator.reset();
-
 	input_update(engine.input);
 	window_update(engine.window);
 
@@ -523,6 +504,12 @@ void begin_frame(Engine & engine)
 
 void end_frame(Engine & engine)
 {
+
+	// these were previously on begin_frame, but then we could not spcify events to start the game
+	// and they seem to work well in here also
+	engine.events = {};
+	engine.temp_allocator.reset();
+
 	auto & clock = engine.clock;
 
 	uint64 current_time = time_now();
@@ -620,17 +607,10 @@ void engine_gui(Engine & engine)
 		collapsing_box("Game Camera", engine.game_camera);
 		collapsing_box("Character", engine.character);
 		collapsing_box("Debug Lighting", engine.light_settings);
-		if (collapsing_box("World Settings", engine.world_settings))
-		{
-			engine.events.recreate_world = true;
-		}
-
+		collapsing_box("World Settings", engine.world_settings);
 		collapsing_box("Grass", engine.grass);
-		if (collapsing_box("Draw Options", engine.draw_options))
-		{
-			// engine.events.recreate_world = true;
-		}
-
+		collapsing_box("Draw Options", engine.draw_options);
+		
 		if (collapsing_box("Terrain", engine.debug_terrain_settings))
 		{
 			engine.debug_terrain.refresh();
@@ -638,7 +618,20 @@ void engine_gui(Engine & engine)
 
 		if (Button("Recreate world"))
 		{
-			engine.events.recreate_world = true;
+			if (engine.world_generation_progress > 1)
+			{
+				engine.events.recreate_world = true;
+			}
+		}
+
+		if(engine.world_generation_progress < 3.0f)
+		{
+			if (engine.world_generation_progress >= 1.0f)
+			{
+				engine.world_generation_progress += engine.clock.unscaled_delta_time;
+			}
+			SameLine();
+			ProgressBar(engine.world_generation_progress, ImVec2(-1.0f, 0.0f));
 		}
 
 		if (Button("Save Changes"))

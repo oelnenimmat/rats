@@ -15,6 +15,8 @@ struct CharacterInput
 	float delta_time;
 
 	bool jump;
+
+	bool reset;
 };
 
 CharacterInput get_character_input(Input * input, GameCamera const & camera)
@@ -53,29 +55,41 @@ CharacterInput get_character_input(Input * input, GameCamera const & camera)
 	result.move_z = move.z;
 
 	result.jump = input_key_went_down(input, InputKey::keyboard_space);
-
+	result.reset = input_key_went_down(input, InputKey::keyboard_p);
 
 	return result;
 }
 
 struct Character
 {
-	float3 position;
-	float speed;
+	// properties
+	// $Title: Properties
+	float3 start_position = float3(10, 10, 10);
 	float size;
+	float jump_power = 10;
+	float3 color;
+	float speed;
 
-
+	// state
+	// $Title: State
+	float3 position;
 	float y_position;
 	float y_velocity;
-	float jump_power = 10;
 
+	// external interface thing, computed in update
 	float3 grounded_position;
-
-	float3 color;
 };
+
+void init(Character & character)
+{
+	character.position 		= character.start_position;
+	character.y_position 	= character.start_position.y;
+	character.y_velocity 	= 0;
+}
 
 inline SERIALIZE_STRUCT(Character const & character)
 {
+	serializer.write("start_position", character.start_position);
 	serializer.write("position", character.position);
 	serializer.write("speed", character.speed);
 	serializer.write("y_position", character.y_position);
@@ -87,6 +101,7 @@ inline SERIALIZE_STRUCT(Character const & character)
 
 inline DESERIALIZE_STRUCT(Character & character)
 {
+	serializer.read("start_position", character.start_position);
 	serializer.read("position", character.position);
 	serializer.read("speed", character.speed);
 	serializer.read("y_position", character.y_position);
@@ -99,16 +114,23 @@ inline DESERIALIZE_STRUCT(Character & character)
 
 namespace gui
 {
-	inline bool edit(Character & c)
+	inline bool edit(Character & character)
 	{
 		auto gui = gui_helper();
-		gui.edit("position", c.position);
-		gui.edit("speed", c.speed);
-		gui.edit("y_position", c.y_position);
-		gui.edit("y_velocity", c.y_velocity);
-		gui.edit("jump_power", c.jump_power);
-		gui.edit("size", c.size);
-		gui.edit("color", c.color, META_MEMBER_FLAGS_COLOR);
+
+		Text("Properties");
+		gui.edit("start_position", character.start_position);
+		gui.edit("speed", character.speed);
+		gui.edit("size", character.size);
+		gui.edit("color", character.color, META_MEMBER_FLAGS_COLOR);
+		gui.edit("jump_power", character.jump_power);
+
+		Spacing();	
+		Text("State");
+		gui.edit("position", character.position);
+		gui.edit("y_position", character.y_position);
+		gui.edit("y_velocity", character.y_velocity);
+
 		return gui.dirty;
 	}
 }
@@ -129,6 +151,11 @@ struct CharacterUpdateJob
 	{
 		Character & character 			= characters[i];
 		CharacterInput const & input 	= inputs[i];
+
+		if (input.reset)
+		{
+			init(character);
+		}
 
 		float3 movement = float3(input.move_x, 0, input.move_z) * delta_time * character.speed;
 

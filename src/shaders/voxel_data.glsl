@@ -8,14 +8,6 @@ struct VoxelData
 	ivec4 material_child_offset; // x: material, y: child_offset
 };
 
-VoxelData empty_voxel_data()
-{
-	VoxelData v;
-	v.color = vec4(0,0,0,0);
-	v.material_child_offset = ivec4(0,0,0,0);
-	return v;
-}
-
 int get_material(VoxelData data)
 {
 	return data.material_child_offset.x;
@@ -26,32 +18,69 @@ int get_child_offset(VoxelData data)
 	return data.material_child_offset.y;
 }
 
-layout(std430, set = PER_FRAME_SET, binding = PER_FRAME_VOXEL_OCTREE_DATA) readonly buffer Voxels
-{
-	VoxelData data [];
-} voxels;
+// ----------------------------------------------------------------------------
 
-
-layout(set = PER_FRAME_SET, binding = PER_FRAME_VOXEL_OCTREE_INFO) readonly uniform VoxelInfo
+layout(std430, set = PER_FRAME_SET, binding = PER_FRAME_VOXEL_DATA) readonly buffer Voxels
 {
-	// xyz has 3 dimensions, and w/[3] has total elements in block, i.e. x*y*z
-	ivec4 max_octree_depth;
+	VoxelData voxel_data [];
+};
+
+layout(set = PER_FRAME_SET, binding = PER_FRAME_VOXEL_INFO) readonly uniform VoxelWorldInfo
+{
 	vec4 world_min;
 	vec4 world_max;
+	vec4 space_transforms;	// x: WS_to_VS, y: VS_to_WS, z: WS_to_CS, w: CS_to_WS
+	ivec4 chunk_and_voxel_dimensions; // xyz: chunk_dimensions, w: voxel dimensions
+} voxel_world_info;
 
-	// vec4 material_params;
-} voxel_info;
 
-int get_max_sample_depth()
+float get_WS_to_VS()
 {
-	return voxel_info.max_octree_depth.x;
+	return voxel_world_info.space_transforms.x;
 }
 
-float get_roughness()
+float get_VS_to_WS()
 {
-	return 1.0 - get_smoothness();
-	// return material_params.x;
+	return voxel_world_info.space_transforms.y;
 }
+
+float get_WS_to_CS()
+{
+	return voxel_world_info.space_transforms.z;
+}
+
+float get_CS_to_WS()
+{
+	return voxel_world_info.space_transforms.w;
+}
+
+ivec3 get_chunks_in_world()
+{
+	return voxel_world_info.chunk_and_voxel_dimensions.xyz;
+}
+
+int get_voxels_in_chunk()
+{
+	return voxel_world_info.chunk_and_voxel_dimensions.w;
+}
+
+// todo: function calls from these could be removed, but it gets messier if those are later changed
+int get_chunk_index(const ivec3 chunk)
+{
+	return chunk.x + (chunk.y + chunk.z * get_chunks_in_world().y) * get_chunks_in_world().x;
+}
+
+int get_voxel_index(const ivec3 voxel)
+{
+	return voxel.x + (voxel.y + voxel.z * get_voxels_in_chunk()) * get_voxels_in_chunk();
+}
+
+int get_voxel_data_start()
+{
+	return get_chunks_in_world().x * get_chunks_in_world().y * get_chunks_in_world().z;
+}
+
+// ----------------------------------------------------------------------------
 
 // float get_reflectivity()
 // {
@@ -62,6 +91,12 @@ float get_roughness()
 // {
 // 	return any(lessThan(position_WS, vec3(0,0,0))) && any(greaterThan(position_WS, vec3(10,10,10)));
 // }
+
+float get_roughness()
+{
+	return 1.0 - get_smoothness();
+	// return material_params.x;
+}
 
 const vec4 air_color = vec4(0.92, 0.95, 1.0, 0.01);
 vec3 world_min = vec3(0, 0, 0);
