@@ -170,6 +170,11 @@ GrassUpdateJob get_grass_update_job(GrassSystem & grass, float delta_time)
 	return job;
 }
 
+/*
+todo:
+generate with integer grid/coords and hash, and with a density [0,1] value.
+density can come from anything
+*/
 void generate_grass(GrassSystem & grass)
 {
 	if (grass.created)

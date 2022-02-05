@@ -28,23 +28,20 @@
 
 #include "world_generator.hpp"
 
-struct CameraData
+struct PerFrameUniformBuffer
 {
-	float4x4 view_matrix;
-	float4 max_distance;
-	float4 world_size;
-
-	DrawOptionsGpuData draw_options;
+	CameraGpuData 		camera;
+	DrawOptionsGpuData 	draw_options;
+	LightingGpuData		lighting;
 };
 
 // Note(Leo): defines in compute.comp must match the order of these, they define the pipeline layout
 enum GraphicsPerFrameBufferNames : int
 {
 	voxel_data_buffer,
-
 	voxel_info_buffer,
+
 	camera_buffer,
-	lighting_buffer,
 
 	per_frame_buffer_count
 };
@@ -68,13 +65,13 @@ void engine_on_window_lose_focus(void * data)
 	switch(engine->camera_mode)
 	{
 		case CameraMode::editor:
-			engine->camera_disabled_because_no_focus = engine->camera.enabled;
-			engine->camera.enabled = false;
+			engine->camera_disabled_because_no_focus = engine->editor_camera_controller.enabled;
+			engine->editor_camera_controller.enabled = false;
 			break;
 
 		case CameraMode::game:
-			engine->camera_disabled_because_no_focus = engine->game_camera.enabled;
-			engine->game_camera.enabled = false;
+			engine->camera_disabled_because_no_focus = engine->game_camera_controller.enabled;
+			engine->game_camera_controller.enabled = false;
 			break;
 	}
 }
@@ -91,8 +88,8 @@ void engine_on_window_gain_focus(void * data)
 
 		switch(engine->camera_mode)
 		{
-			case CameraMode::editor: engine->camera.enabled = true; break;
-			case CameraMode::game: engine->game_camera.enabled = true; break;
+			case CameraMode::editor: engine->editor_camera_controller.enabled = true; break;
+			case CameraMode::game: engine->game_camera_controller.enabled = true; break;
 		}
 	}
 }
@@ -174,8 +171,8 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 
 	// -----------------------------------------------------------------
 
-	engine.camera.enabled = false;
-	engine.game_camera.enabled = false;
+	engine.editor_camera_controller.enabled = false;
+	engine.game_camera_controller.enabled = false;
 	window_set_cursor_visible(window, true);
 
 	// -----------------------------------------------------------------
@@ -183,7 +180,7 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 	// Game systems
 	// Todo(Leo): some of init functions are free functions, some are member. decide  which one is
 	// better and use it everywhere
-	init(engine.renderer, &engine.world_settings, &engine.draw_options);
+	init(engine.renderer, &engine.world_settings, &engine.draw_options, engine.persistent_allocator);
 	engine.debug_terrain.init(engine.debug_terrain_settings);
 	engine.grass.init(engine.grass_settings, global_debug_allocator, engine.debug_terrain);
 
@@ -199,7 +196,6 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 	buffer_types[voxel_data_buffer] 		= GraphicsBufferType::storage;
 	buffer_types[voxel_info_buffer] 		= GraphicsBufferType::uniform;
 	buffer_types[camera_buffer] 			= GraphicsBufferType::uniform;
-	buffer_types[lighting_buffer] 			= GraphicsBufferType::uniform;
 
 	GraphicsPipelineLayout layout = {};
 	layout.per_frame_buffer_count = per_frame_buffer_count;
@@ -213,13 +209,11 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 	// These are fixed size
 	// handles are refernces to buffers on graphics
 	engine.voxel_info_buffer_handle 	= graphics_create_buffer(graphics, sizeof(VoxelWorldInfo), GraphicsBufferType::uniform);
-	engine.camera_buffer_handle 		= graphics_create_buffer(graphics, sizeof(CameraData), GraphicsBufferType::uniform);
-	engine.lighting_buffer_handle 		= graphics_create_buffer(graphics, sizeof(LightData), GraphicsBufferType::uniform);
+	engine.per_frame_uniform_buffer_handle 		= graphics_create_buffer(graphics, sizeof(PerFrameUniformBuffer), GraphicsBufferType::uniform);
 
 	// non handles are integers that match the compute pipeline layout
 	graphics_bind_buffer(graphics, engine.voxel_info_buffer_handle, voxel_info_buffer, GraphicsBufferType::uniform);
-	graphics_bind_buffer(graphics, engine.camera_buffer_handle, camera_buffer, GraphicsBufferType::uniform);
-	graphics_bind_buffer(graphics, engine.lighting_buffer_handle, lighting_buffer, GraphicsBufferType::uniform);
+	graphics_bind_buffer(graphics, engine.per_frame_uniform_buffer_handle, camera_buffer, GraphicsBufferType::uniform);
 
 
 	engine.voxel_data_buffer_handle = graphics_create_buffer(graphics, 0, GraphicsBufferType::storage);
@@ -238,14 +232,16 @@ void update_engine(Engine & engine)
 
 	if (engine.events.recreate_world)
 	{
-		// this is dynamic size
-		int chunk_count 			= engine.draw_options.voxel_settings.chunks_in_world;
-		int voxel_count_in_chunk 	= engine.draw_options.voxel_settings.voxels_in_chunk;
-
 		int total_chunk_count 		= engine.draw_options.voxel_settings.total_chunk_count();
 		int total_voxel_count 		= engine.draw_options.voxel_settings.total_voxel_count_in_world();
-		int total_element_count 	= total_chunk_count + total_voxel_count;
 
+		int3 chunks_in_map_2 = int3(2,3,2);
+		int elements_in_chunk_map_2 = 2*3*2 + 2*3*2* engine.draw_options.voxel_settings.total_voxel_count_in_chunk();
+
+		int random_extra_space = 0;//20 * 40 * 20;
+		int total_element_count 	= total_chunk_count + total_voxel_count + elements_in_chunk_map_2 + random_extra_space;
+
+		
 		size_t voxel_buffer_memory_size = total_element_count * sizeof(VoxelData);
 
 		graphics_destroy_buffer(graphics, engine.voxel_data_buffer_handle);
@@ -259,12 +255,26 @@ void update_engine(Engine & engine)
 		engine.renderer.temp_chunk_map.dispose();
 		engine.voxel_allocator.reset();
 
-		init(engine.renderer.chunk_map, engine.voxel_allocator, chunk_count, voxel_count_in_chunk);
+		init(
+			engine.renderer.chunk_map,
+			engine.voxel_allocator,
+			engine.draw_options.voxel_settings.chunks_in_world,
+			engine.draw_options.voxel_settings.voxels_in_chunk
+		);
+
+		VoxelData * gpu_buffer_memory = reinterpret_cast<VoxelData*>(graphics_buffer_get_writeable_memory(graphics, engine.voxel_data_buffer_handle));
 		init(
 			engine.renderer.temp_chunk_map,
-			reinterpret_cast<VoxelData*>(graphics_buffer_get_writeable_memory(graphics, engine.voxel_data_buffer_handle)),
-			chunk_count,
-			voxel_count_in_chunk
+			gpu_buffer_memory,
+			engine.draw_options.voxel_settings.chunks_in_world,
+			engine.draw_options.voxel_settings.voxels_in_chunk
+		);
+
+		init(
+			engine.renderer.temp_chunk_map_2,
+			gpu_buffer_memory + total_chunk_count + total_voxel_count,
+			chunks_in_map_2,
+			engine.draw_options.voxel_settings.voxels_in_chunk
 		);
 
 		generate_test_world_in_thread(
@@ -281,8 +291,8 @@ void update_engine(Engine & engine)
 
 	if (input_key_went_down(input, InputKey::keyboard_escape))
 	{
-		engine.camera.enabled = false;
-		engine.game_camera.enabled = false;
+		engine.editor_camera_controller.enabled = false;
+		engine.game_camera_controller.enabled = false;
 		window_set_cursor_visible(window, true);
 	}
 
@@ -297,10 +307,9 @@ void update_engine(Engine & engine)
 
 		// todo: this is replicated code, from initialize_engine
 		GraphicsBufferType buffer_types [per_frame_buffer_count];
-		buffer_types[voxel_data_buffer] 		= GraphicsBufferType::storage;
-		buffer_types[voxel_info_buffer] 	= GraphicsBufferType::uniform;
-		buffer_types[camera_buffer] 			= GraphicsBufferType::uniform;
-		buffer_types[lighting_buffer] 			= GraphicsBufferType::uniform;
+		buffer_types[voxel_data_buffer] = GraphicsBufferType::storage;
+		buffer_types[voxel_info_buffer] = GraphicsBufferType::uniform;
+		buffer_types[camera_buffer] 	= GraphicsBufferType::uniform;
 
 		GraphicsPipelineLayout layout = {};
 		layout.per_frame_buffer_count = per_frame_buffer_count;
@@ -311,8 +320,7 @@ void update_engine(Engine & engine)
 
 		graphics_bind_buffer(graphics, engine.voxel_data_buffer_handle, voxel_data_buffer, GraphicsBufferType::storage);
 		graphics_bind_buffer(graphics, engine.voxel_info_buffer_handle, voxel_info_buffer, GraphicsBufferType::uniform);
-		graphics_bind_buffer(graphics, engine.camera_buffer_handle, camera_buffer, GraphicsBufferType::uniform);
-		graphics_bind_buffer(graphics, engine.lighting_buffer_handle, lighting_buffer, GraphicsBufferType::uniform);
+		graphics_bind_buffer(graphics, engine.per_frame_uniform_buffer_handle, camera_buffer, GraphicsBufferType::uniform);
 
 		std::cout << "[ENGINE]: Recreated compute pipeline\n";
 	}
@@ -324,7 +332,11 @@ void update_engine(Engine & engine)
 
 	if (engine.camera_mode == CameraMode::editor)
 	{
-		update_camera(engine.camera, get_camera_input(input, engine.input_settings, unscaled_delta_time));
+		update_camera(
+			engine.editor_camera_controller,
+			engine.camera,
+			get_camera_input(input, engine.input_settings, unscaled_delta_time)
+		);
 	}
 	else
 	{
@@ -339,12 +351,13 @@ void update_engine(Engine & engine)
 		);
 
 		update_game_camera(
-			engine.game_camera,
+			engine.game_camera_controller,
+			engine.camera,
 			get_camera_input(input, engine.input_settings, unscaled_delta_time),
 			game_camera_target_position
 		);
 
-		auto single_player_character_input = get_character_input(input, engine.game_camera);
+		auto single_player_character_input = get_character_input(input, engine.game_camera_controller);
 
 		auto character_update_job = CharacterUpdateJob
 		{
@@ -399,7 +412,7 @@ void render_engine(Engine & engine)
 			TIME_FUNCTION(prepare_frame(engine.renderer, engine.temp_allocator), engine.timings.prepare_frame);
 
 			TIME_FUNCTION(
-				draw_cuboid(engine.renderer, engine.character.position, engine.character.size, engine.character.color),
+				draw_cuboid(engine.renderer, engine.character.position, engine.character.size, engine.character.color, true),
 				engine.timings.draw_character
 			);
 
@@ -421,23 +434,17 @@ void render_engine(Engine & engine)
 	TIMER_BEGIN(setup_draw_buffers);
 
 		VoxelWorldInfo voxel_world_info = engine.renderer.get_voxel_world_info();
-		LightData light_data 			= engine.light_settings.get_light_data();
+		// LightingGpuData light_data 		= engine.light_settings.get_light_data();
 		
-		CameraData camera_data;
-		camera_data.view_matrix = engine.camera_mode == CameraMode::editor ? engine.camera.view_matrix : engine.game_camera.view_matrix; 
-		camera_data.max_distance = float4(
-			engine.game_camera.max_distance,
-			engine.game_camera.field_of_view,
-			0,
+		PerFrameUniformBuffer per_frame_uniform_buffer = {};
+		per_frame_uniform_buffer.camera = engine.camera.get_gpu_data();
+		per_frame_uniform_buffer.camera.render_bounds_min = float4(0,0,0,0);
+		per_frame_uniform_buffer.camera.render_bounds_max = float4(
+			float3(engine.draw_options.voxel_settings.chunks_in_world) * engine.draw_options.voxel_settings.CS_to_WS(),
 			0
 		);
-		camera_data.world_size = float4(
-			engine.draw_options.voxel_settings.chunks_in_world * engine.draw_options.voxel_settings.CS_to_WS(),
-			engine.draw_options.voxel_settings.chunks_in_world * engine.draw_options.voxel_settings.CS_to_WS(),
-			engine.draw_options.voxel_settings.chunks_in_world * engine.draw_options.voxel_settings.CS_to_WS(),
-			0
-		);
-		camera_data.draw_options = engine.draw_options.get_gpu_data();
+		per_frame_uniform_buffer.draw_options = engine.draw_options.get_gpu_data();
+		per_frame_uniform_buffer.lighting = engine.light_settings.get_light_data();
 
 	TIMER_END(engine.timings, setup_draw_buffers);
 
@@ -452,8 +459,7 @@ void render_engine(Engine & engine)
 		graphics_buffer_apply(graphics, engine.voxel_data_buffer_handle);
 
 		graphics_write_buffer(graphics, engine.voxel_info_buffer_handle, sizeof voxel_world_info, &voxel_world_info);
-		graphics_write_buffer(graphics, engine.camera_buffer_handle, sizeof camera_data, &camera_data);
-		graphics_write_buffer(graphics, engine.lighting_buffer_handle, sizeof light_data, &light_data);
+		graphics_write_buffer(graphics, engine.per_frame_uniform_buffer_handle, sizeof per_frame_uniform_buffer, &per_frame_uniform_buffer);
 
 	TIMER_END(engine.timings, copy_to_graphics);
 
@@ -483,8 +489,7 @@ void shutdown_engine(Engine & engine)
 
 	graphics_destroy_buffer(engine.graphics, engine.voxel_data_buffer_handle);
 	graphics_destroy_buffer(engine.graphics, engine.voxel_info_buffer_handle);
-	graphics_destroy_buffer(engine.graphics, engine.camera_buffer_handle);
-	graphics_destroy_buffer(engine.graphics, engine.lighting_buffer_handle);
+	graphics_destroy_buffer(engine.graphics, engine.per_frame_uniform_buffer_handle);
 
 	platform_memory_release(engine.temp_allocator.return_memory_back_to_where_it_was_received());
 	platform_memory_release(engine.persistent_allocator.return_memory_back_to_where_it_was_received());
@@ -537,14 +542,9 @@ namespace gui
 {
 	void display(char const * label, ArenaAllocator const & a)
 	{
-		auto as_mebibytes = [](size_t bytes)
-		{
-			return static_cast<float>(bytes / 1024) / 1024.0f;
-		};
-
 		Text("%s", label);
-		Value("Used", as_mebibytes(a.used()), "%.2f MiB");
-		Value("Capacity", as_mebibytes(a.capacity()), "%.2f MiB");
+		Text("Used %.2f / %.0f MiB", as_mebibytes(a.used()), as_mebibytes(a.capacity()));
+		Text("Available %.2f MiB", as_mebibytes(a.available()));
 	}
 }
 
@@ -584,14 +584,14 @@ void engine_gui(Engine & engine)
 
 		if (Button("Free camera"))
 		{
-			engine.camera.enabled = true;
+			engine.editor_camera_controller.enabled = true;
 			window_set_cursor_visible(engine.window, false);
 			engine.camera_mode = CameraMode::editor;
 		}
 
 		if (Button("Game camera"))
 		{
-			engine.game_camera.enabled = true;
+			engine.game_camera_controller.enabled = true;
 			window_set_cursor_visible(engine.window, false);
 			engine.camera_mode = CameraMode::game;
 		}
@@ -603,8 +603,9 @@ void engine_gui(Engine & engine)
 	{
 		collapsing_box("Input Settings", engine.input_settings);
 		collapsing_box("Noise Settings", engine.noise_settings);
-		collapsing_box("Editor Camera", engine.camera);
-		collapsing_box("Game Camera", engine.game_camera);
+		collapsing_box("Camera", engine.camera);
+		collapsing_box("Editor Camera Controller", engine.editor_camera_controller);
+		collapsing_box("Game Camera Controller", engine.game_camera_controller);
 		collapsing_box("Character", engine.character);
 		collapsing_box("Debug Lighting", engine.light_settings);
 		collapsing_box("World Settings", engine.world_settings);
@@ -640,12 +641,6 @@ void engine_gui(Engine & engine)
 		}
 
 		edit("Mouse Colors", engine.mouse_colors);
-
-
-		edit("Debug Voxel x", engine.debug_voxel.x);
-		edit("Debug Voxel y", engine.debug_voxel.y);
-		edit("Debug Voxel z", engine.debug_voxel.z);
-		edit("Debug Voxel w", engine.debug_voxel.w);
 
 		if (ImGui::Button("Open Imgui Demo"))
 		{

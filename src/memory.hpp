@@ -85,3 +85,31 @@ TTo & unsafe_cast(TTFrom & from)
 constexpr size_t kibibytes(size_t n) { return n * 1024; }
 constexpr size_t mebibytes(size_t n) { return kibibytes(n) * 1024; }
 constexpr size_t gibibytes(size_t n) { return mebibytes(n) * 1024; }
+
+constexpr float as_kibibytes(size_t bytes) { return (float)bytes / kibibytes(1); } 
+constexpr float as_mebibytes(size_t bytes) { return (float)bytes / mebibytes(1); } 
+constexpr float as_gibibytes(size_t bytes) { return (float)bytes / gibibytes(1); } 
+
+/*
+struct MemoryCopyJob
+{
+	void * destination;
+	void * source;
+
+	size_t chunk_size;
+	size_t last_chunk_index;
+	size_t last_chunk_size;
+
+	void execute(int i)
+	{
+		size_t size = i == last_chunk_index ? last_chunk_size : chunk_size;
+		size_t offset = i * chunk_size;
+
+		memcpy(
+			reinterpret_cast<uint8_t*>(destination) + offset,
+			reinterpret_cast<uint8_t*>(source) + offset,
+			size
+		);
+	}
+};
+*/

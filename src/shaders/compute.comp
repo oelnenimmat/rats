@@ -12,77 +12,93 @@ layout(set = 0, binding = 0, rgba8) uniform writeonly image2D result_image;
 
 #define PER_FRAME_VOXEL_DATA 0
 #define PER_FRAME_VOXEL_INFO 1
-#define PER_FRAME_CAMERA 2
-#define PER_FRAME_LIGHTING 3
+#define PER_FRAME_UNIFORM 2
 
 #define DRAW_MODE_LIT 0
 #define DRAW_MODE_ALBEDO 1
-#define DRAW_MODE_LITS 2
+#define DRAW_MODE_NORMALS 2
 
 // There used to be others, and maybe some new ones will be tried, but now there is one only
 #define DRAW_METHOD_CHUNKTREE 0
 
 
-layout(set = PER_FRAME_SET, binding = PER_FRAME_CAMERA) uniform Camera
+struct CameraData
 {
 	mat4 view;
 	vec4 max_distance_X_field_of_view_Y;
-	vec4 render_bounds;
-	
+
+	vec4 render_bounds_min;
+	vec4 render_bounds_max;
+};
+
+struct DrawOptions
+{
 	ivec4 draw_options; // x: DRAW_MODE_, y: DRAW_METHOD_, z: draw bounds
 	vec4 debug_options;
-} camera;
+};
 
-layout(set = PER_FRAME_SET, binding = PER_FRAME_LIGHTING) uniform Lighting
+struct LightingData
 {
 	vec4 direct_direction;
 	vec4 direct_color;
-	vec4 ambient_color;
-} lighting;
+	vec4 ambient_color;	
+};
+
+layout(set = PER_FRAME_SET, binding = PER_FRAME_UNIFORM) uniform PerFrame
+{
+	CameraData 		camera_data;
+	DrawOptions 	draw_options;
+	LightingData 	lighting;
+} per_frame;
 
 float get_max_distance()
 {
-	return camera.max_distance_X_field_of_view_Y.x;
+	return per_frame.camera_data.max_distance_X_field_of_view_Y.x;
 }	
 
 float get_field_of_view()
 {
-	return camera.max_distance_X_field_of_view_Y.y;
+	return per_frame.camera_data.max_distance_X_field_of_view_Y.y;
 }
 
 float get_smoothness()
 {
-	return clamp(camera.debug_options.x, 0, 1);
+	return clamp(per_frame.draw_options.debug_options.x, 0, 1);
 }
 
 float get_specular_strength()
 {
-	return clamp(camera.debug_options.w, 0, 1);
+	return clamp(per_frame.draw_options.debug_options.w, 0, 1);
 }
 
 float get_bounce_ray_length()
 {
-	return camera.debug_options.y;
+	return per_frame.draw_options.debug_options.y;
 }
 
 float get_normal_offset()
 {
-	return camera.debug_options.z;
+	return per_frame.draw_options.debug_options.z;
 }
 
-vec3 get_render_bounds()
+vec3 get_render_bounds_min()
 {
-	return vec3(camera.render_bounds.x, camera.render_bounds.x, camera.render_bounds.x);
+	return per_frame.camera_data.render_bounds_min.xyz;
+}
+
+vec3 get_render_bounds_max()
+{
+	return per_frame.camera_data.render_bounds_max.xyz;
 }
 
 int get_draw_mode()
 {
-	return camera.draw_options.x;
+	return per_frame.draw_options.draw_options.x;
 }
 
 int get_draw_method()
 {
-	return camera.draw_options.y;
+	return per_frame.draw_options.draw_options.y;
 }
 
 #include "raycast.glsl"
@@ -97,10 +113,10 @@ Ray get_camera_ray()
 	uv.x *= resolution.x / resolution.y;
 
 	Ray ray;
-	ray.origin = (camera.view * vec4(0,0,0,1)).xyz;
+	ray.origin = (per_frame.camera_data.view * vec4(0,0,0,1)).xyz;
 	
 	ray.direction = normalize(vec3(uv, get_field_of_view()));
-	ray.direction = (camera.view * vec4(ray.direction, 0)).xyz;
+	ray.direction = (per_frame.camera_data.view * vec4(ray.direction, 0)).xyz;
 
 	ray.inverse_direction = 1.0 / ray.direction;
 
@@ -109,6 +125,12 @@ Ray get_camera_ray()
 	return ray;
 }
 
+// vec3 blend(vec4 source, vec3 destination)
+// {
+// 	float src_alpha 			= clamp(source.a, 0, 1);
+// 	float one_minus_src_alpha 	= 1.0 - src_alpha;
+// 	return src_alpha * source.rgb + one_minus_src_alpha * destination.rgb;
+// }
 
 void main()
 {
@@ -131,17 +153,43 @@ void main()
 	// color = vec3(0,0,0);
 
 
-	vec4 ray_result_color = traverse_chunktree(camera_ray, get_max_distance());
+	vec4 ray_result_color_a = traverse_voxels(camera_ray, get_max_distance(), 0);
+	vec4 ray_result_color_b = traverse_voxels(camera_ray, get_max_distance(), 1);
+
+	vec4 ray_result_color = ray_result_color_a;
+	if (ray_result_color_b.a > ray_result_color_a.b)
+	{
+		ray_result_color = ray_result_color_b;
+		// ray_result_color.a = 1;
+	}
+	// vec4 ray_result_color = mix(ray_result_color_a, ray_result_color_b, ray_result_color_b.a);
 
 	float src_alpha 			= clamp(ray_result_color.a, 0, 1);
 	float one_minus_src_alpha 	= 1.0 - src_alpha;
 	color = src_alpha * ray_result_color.rgb + one_minus_src_alpha * color;
 
+	// color.rgb = ray_result_color_b.aaa;
+
 	vec3 debug_color = vec3(0, 0.8, 0.8);
 
-	if (draw_bounds(camera_ray))
+	// This is wasteful way of doing this. Either do separate compute shader, or actual grpahics pipeline with lines
+	if (draw_bounds(camera_ray, get_render_bounds_min(), get_render_bounds_max()))
 	{
 		color = debug_color;
+	}
+
+	vec3 chunk_range_bounds_min = voxel_world_info.chunk_range_offset.xyz * get_CS_to_WS();
+	vec3 chunk_range_bounds_max = (voxel_world_info.chunk_range_offset.xyz + voxel_world_info.chunk_range_size.xyz) * get_CS_to_WS();
+	if (draw_bounds(camera_ray, chunk_range_bounds_min, chunk_range_bounds_max))
+	{
+		color = vec3(0.8, 0.1, 0.5);
+	}
+
+	vec3 chunk_range_bounds_min_2 = voxel_world_info.chunk_range_offset_2.xyz * get_CS_to_WS();
+	vec3 chunk_range_bounds_max_2 = (voxel_world_info.chunk_range_offset_2.xyz + voxel_world_info.chunk_range_size_2.xyz) * get_CS_to_WS();
+	if (draw_bounds(camera_ray, chunk_range_bounds_min_2, chunk_range_bounds_max_2))
+	{
+		color = vec3(0.1, 0.8, 0.5);
 	}
 
 	vec4 result = vec4(color, 1);    

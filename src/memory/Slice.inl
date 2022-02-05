@@ -61,3 +61,9 @@ void copy_slice_data(Slice<T> & src, Slice<T> const & dst)
 	MINIMA_ASSERT(src.length() == dst.length());
 	memcpy(src.get_memory_ptr(), dst.get_memory_ptr(), src.memory_size());
 }
+
+template<typename T>
+void clear_slice_data(Slice<T> & slice)
+{
+	memset(slice.get_memory_ptr(), 0, slice.memory_size());
+}

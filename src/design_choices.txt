@@ -1,1 +1,3 @@
 - Voxels are always cubes
+- chunk is 1 world unit
+	-> voxels_in_chunk define resolution

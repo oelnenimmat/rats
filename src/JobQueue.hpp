@@ -7,6 +7,7 @@
 
 struct JobQueue
 {
+	// todo: allocation sizes here probably do not match at all
 	JobQueue(Allocator & allocator, int max_jobs) :
 		jobs(List<QueuedJob>(max_jobs, allocator)),
 		allocator(&allocator),

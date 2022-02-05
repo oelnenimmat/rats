@@ -5,7 +5,7 @@
 #include "Noise.hpp"
 #include "jobs.hpp"
 #include "DebugTerrain.hpp"
-#include "GameCamera.hpp"
+#include "GameCameraController.hpp"
 #include "memory.hpp"
 
 struct CharacterInput
@@ -19,7 +19,7 @@ struct CharacterInput
 	bool reset;
 };
 
-CharacterInput get_character_input(Input * input, GameCamera const & camera)
+CharacterInput get_character_input(Input * input, GameCameraController const & camera)
 {
 	CharacterInput result = {};
 

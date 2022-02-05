@@ -15,8 +15,10 @@ struct Input;
 #include "Character.hpp"
 #include "Mouse.hpp"
 
+
 #include "Camera.hpp"
-#include "GameCamera.hpp"
+#include "EditorCameraController.hpp"
+#include "GameCameraController.hpp"
 #include "GrassSystem.hpp"
 #include "WorldSettings.hpp"
 #include "DebugTerrain.hpp"
@@ -53,8 +55,9 @@ struct Engine
 	InputSettings input_settings;
 	DrawOptions draw_options = {};
 
-	EditorCamera camera = {};
-	GameCamera game_camera = {};
+	Camera camera = {};
+	EditorCamera editor_camera_controller = {};
+	GameCameraController game_camera_controller = {};
 
 	NoiseSettings noise_settings = {};
 	LightSettings light_settings = {};
@@ -76,8 +79,6 @@ struct Engine
 
 	Character character = { float3(5,5,5), 3.0f };	
 
-	int4 debug_voxel = int4(15, 15, 15, 4);
-
 	struct
 	{
 		bool recreate_world;
@@ -86,10 +87,10 @@ struct Engine
 	MouseState mouses [200] = {};
 	Gradient mouse_colors;
 
+	int chunk_data_buffer_handle;
 	int voxel_data_buffer_handle;
 	int voxel_info_buffer_handle;
-	int camera_buffer_handle;
-	int lighting_buffer_handle;
+	int per_frame_uniform_buffer_handle;
 
 	static constexpr char const * save_filenme = "data/engine.json";
 	static constexpr char const * style_filename = "data/imgui_style.json";
@@ -100,7 +101,8 @@ struct Engine
 inline SERIALIZE_STRUCT(Engine const & engine)
 {
 	serializer.write("camera", engine.camera);
-	serializer.write("game_camera", engine.game_camera);
+	serializer.write("editor_camera_controller", engine.editor_camera_controller);
+	serializer.write("game_camera_controller", engine.game_camera_controller);
 	serializer.write("character", engine.character);
 	serializer.write("input_settings", engine.input_settings);
 	serializer.write("noise_settings", engine.noise_settings);
@@ -115,7 +117,8 @@ inline SERIALIZE_STRUCT(Engine const & engine)
 inline DESERIALIZE_STRUCT(Engine & engine)
 {
 	serializer.read("camera", engine.camera);
-	serializer.read("game_camera", engine.game_camera);
+	serializer.read("editor_camera_controller", engine.editor_camera_controller);
+	serializer.read("game_camera_controller", engine.game_camera_controller);
 	serializer.read("character", engine.character);
 	serializer.read("input_settings", engine.input_settings);
 	serializer.read("noise_settings", engine.noise_settings);

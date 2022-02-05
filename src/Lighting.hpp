@@ -2,7 +2,7 @@
 
 #include "math.hpp"
 
-struct LightData
+struct LightingGpuData
 {
 	float4 direct_direction;
 	float4 direct_color;
@@ -15,9 +15,9 @@ struct LightSettings
 	float3 sun_color;
 	float3 ambient_color;
 
-	LightData get_light_data()
+	LightingGpuData get_light_data()
 	{
-		LightData data = {};
+		LightingGpuData data = {};
 
 		float3 sun_position = float3(
 			std::cos(rats::to_radians(sun_angle.x)) * std::cos(rats::to_radians(sun_angle.y)),
@@ -52,8 +52,8 @@ namespace gui
 	{
 		auto gui = gui_helper();
 		gui.edit("sun_angle", light_settings.sun_angle);
-		gui.edit("sun_color", light_settings.sun_color, META_MEMBER_FLAGS_COLOR_HDR);
-		gui.edit("ambient_color", light_settings.ambient_color, META_MEMBER_FLAGS_COLOR_HDR);
+		gui.edit(ColorEdit3("sun_color", &light_settings.sun_color, ImGuiColorEditFlags_HDR));
+		gui.edit(ColorEdit3("ambient_color", &light_settings.ambient_color));
 		return gui.dirty;
 	}
 }

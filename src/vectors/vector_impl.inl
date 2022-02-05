@@ -237,7 +237,6 @@ inline VECTOR floor (VECTOR v)
 }
 
 /*
-Not needed anywhere yet, lets see if we ever do
 inline VECTOR ceil (VECTOR v)
 {
 	for (int i = 0; i < DIMENSION; i++)
@@ -247,6 +246,7 @@ inline VECTOR ceil (VECTOR v)
 	return v;
 }
 */
+
 inline VECTOR reflect(VECTOR v, VECTOR const & normal)
 {
 	v = v - normal * 2 * dot(v, normal);

@@ -124,6 +124,12 @@ inline STD_OSTREAM_OPERATOR(float3 const & v)
 	return os << "(" << v.x << "," << v.y << "," << v.z << ")";
 }
 
+inline STD_OSTREAM_OPERATOR(int3 const & v)
+{ 
+	return os << "(" << v.x << "," << v.y << "," << v.z << ")";
+}
+
+
 // Sketch on how to implement swizzles if we want to
 // union vec2
 // {

@@ -2,25 +2,30 @@
 
 struct VoxelSettings
 {
-	float units_in_chunk = 20.0f / 16.0f;
-	int voxels_in_chunk 			= 8;
+	// this is slightly less intuitive to edit than "units_per_chunk" would be, 
+	// but in computations it is mor straight forward, and also increasing it increases
+	// resolutiom and not the other way around. Unintuitiviness may also be because now (4.2.2022)
+	// chunks_in_world is a thing here, and increasing the rate of chunkspace but not actually
+	// the number of chunks leads to world/canvas area to actually shrink.
+	float chunks_in_unit 	= 16.0f / 20.0f; // chunks_per_unit
+	int voxels_in_chunk 	= 8;
 
-	int chunks_in_world 			= 16;
+	int3 chunks_in_world 	= int3(16,16,16);
 
 	// Design choice: for now voxels are always cubes. May change.
 
 	float CS_to_VS() const { return voxels_in_chunk; }
 	float VS_to_CS() const { return 1.0f / voxels_in_chunk; }
 
-	float CS_to_WS() const { return units_in_chunk; }
-	float WS_to_CS() const { return 1.0f / units_in_chunk; }
+	float CS_to_WS() const { return 1.0f / chunks_in_unit; }
+	float WS_to_CS() const { return chunks_in_unit; }
 
-	float VS_to_WS() const { return VS_to_CS() * CS_to_WS(); }
-	float WS_to_VS() const { return WS_to_CS() * CS_to_VS(); }
+	float VS_to_WS() const { return 1.0f / (voxels_in_chunk * chunks_in_unit); } //return VS_to_CS() * CS_to_WS(); }
+	float WS_to_VS() const { return chunks_in_unit * voxels_in_chunk; } //return WS_to_CS() * CS_to_VS(); }
 
 	int total_chunk_count()
 	{
-		return chunks_in_world * chunks_in_world * chunks_in_world;
+		return chunks_in_world.x * chunks_in_world.y * chunks_in_world.z;
 	}
 
 	int total_voxel_count_in_chunk()
@@ -36,10 +41,16 @@ struct VoxelSettings
 
 inline SERIALIZE_STRUCT(VoxelSettings const & voxel_settings)
 {
+	serializer.write("chunks_in_unit", voxel_settings.chunks_in_unit);
+	serializer.write("voxels_in_chunk", voxel_settings.voxels_in_chunk);
+	serializer.write("chunks_in_world", voxel_settings.chunks_in_world);
 }
 
 inline DESERIALIZE_STRUCT(VoxelSettings & voxel_settings)
 {
+	serializer.read("chunks_in_unit", voxel_settings.chunks_in_unit);
+	serializer.read("voxels_in_chunk", voxel_settings.voxels_in_chunk);
+	serializer.read("chunks_in_world", voxel_settings.chunks_in_world);
 }
 
 namespace gui
@@ -47,7 +58,7 @@ namespace gui
 	inline bool edit(VoxelSettings & voxel_settings)
 	{
 		auto gui = gui_helper();
-		gui.edit("units_in_chunk", voxel_settings.units_in_chunk);
+		gui.edit("chunks_in_unit", voxel_settings.chunks_in_unit);
 		gui.edit("chunks_in_world", voxel_settings.chunks_in_world);
 		gui.edit("voxels_in_chunk", voxel_settings.voxels_in_chunk);
 		
@@ -60,6 +71,17 @@ namespace gui
 			Value("WS_to_CS", voxel_settings.WS_to_CS());
 			Value("VS_to_WS", voxel_settings.VS_to_WS());
 			Value("WS_to_VS", voxel_settings.WS_to_VS());
+			Value("total chunk count", voxel_settings.total_chunk_count());
+			Value("total voxel count", voxel_settings.total_voxel_count_in_world());
+
+			int3 voxels_in_world = voxel_settings.chunks_in_world * voxel_settings.voxels_in_chunk;
+			Text("voxels in world x: %i y: %i z: %i", voxels_in_world.x, voxels_in_world.y, voxels_in_world.z);
+
+			float3 canvas_size_in_world = float3(voxel_settings.chunks_in_world) * voxel_settings.CS_to_WS();
+			Text("canvas size in world x: %.2f y: %.2f z: %.2f", canvas_size_in_world.x, canvas_size_in_world.y, canvas_size_in_world.z);
+
+			size_t memory_estimate_bytes = (voxel_settings.total_chunk_count() + voxel_settings.total_voxel_count_in_world()) * 3 * sizeof (float4);
+			Text("memory estimate: %.2f MiB", as_mebibytes(memory_estimate_bytes));
 
 			PopStyleColor();
 		Unindent();
@@ -67,7 +89,6 @@ namespace gui
 		return gui.dirty;
 	}
 }
-
 
 enum struct ComputeShaderDrawMode : int
 {

@@ -25,19 +25,26 @@ void generate_test_world(
 	float VS_to_WS = voxel_settings.VS_to_WS();
 	float WS_to_VS = voxel_settings.WS_to_VS();
 
-	// float chunk_count_per_dimension = world_settings.world_size * voxel_settings.WS_to_CS();
-	// int voxel_count_per_dimension = chunk_count_per_dimension * voxel_settings.voxels_in_chunk;
+	// int voxel_count_per_dimension = rats::min(
+	// 	(int)std::floor(world_settings.world_size * WS_to_VS),
+	// 	voxel_settings.chunks_in_world * voxel_settings.voxels_in_chunk
+	// );
 
-	int voxel_count_per_dimension = rats::min(
+	int voxel_count_x = rats::min(
 		(int)std::floor(world_settings.world_size * WS_to_VS),
-		voxel_settings.chunks_in_world * voxel_settings.voxels_in_chunk
+		voxel_settings.chunks_in_world.x * voxel_settings.voxels_in_chunk
 	);
 
-	std::cout << "[WORLD]: voxel_count_per_dimension = " << voxel_count_per_dimension << "\n";
+	int voxel_count_z = rats::min(
+		(int)std::floor(world_settings.world_size * WS_to_VS),
+		voxel_settings.chunks_in_world.z * voxel_settings.voxels_in_chunk
+	);
 
-	for (int z = 0; z < voxel_count_per_dimension; z++)
+	std::cout << "[WORLD]: voxel_count x: " << voxel_count_x << ", z: " << voxel_count_z <<  "\n";
+
+	for (int z = 0; z < voxel_count_z; z++)
 	{
-		for (int x = 0; x < voxel_count_per_dimension; x++)
+		for (int x = 0; x < voxel_count_x; x++)
 		{
 			// Add 0.5 to move to center of voxel. y doesn't matter, it is set later
 			float3 world_position 		= float3(x + 0.5, 0,z + 0.5) * VS_to_WS;
@@ -79,7 +86,7 @@ void generate_test_world(
 						normal += float3(-1, 0, 0);
 					}
 
-					if (x == voxel_count_per_dimension - 1)
+					if (x == voxel_count_x - 1)
 					{
 						normal += float3(1,0,0);
 					}
@@ -89,7 +96,7 @@ void generate_test_world(
 						normal += float3(0,0,-1);
 					}
 
-					if (z == voxel_count_per_dimension - 1)
+					if (z == voxel_count_z - 1)
 					{
 						normal += float3(0,0,1);
 					}
@@ -125,8 +132,9 @@ void generate_test_world(
 
 
 			{
-				float done = z * voxel_count_per_dimension +  x;
-				*progress = done / (voxel_count_per_dimension * voxel_count_per_dimension);
+				// just disregard y in here, this is accurate enough
+				float done = z * voxel_count_x +  x;
+				*progress = done / (voxel_count_x * voxel_count_z);
 			}
 		}
 	}

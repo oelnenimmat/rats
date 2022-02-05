@@ -46,6 +46,7 @@ struct ArenaAllocator : Allocator
 
 	size_t capacity() const { return _capacity; }
 	size_t used() const { return _used; }
+	size_t available() const { return _capacity - _used; }
 
 private:
 	size_t _capacity;

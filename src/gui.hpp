@@ -122,7 +122,6 @@ namespace gui
 		return DragFloat2(label, &f, 0.01f);
 	}
 
-
 	inline bool edit(char const * label, int3 & i)
 	{
 		return InputInt3(label, &i);

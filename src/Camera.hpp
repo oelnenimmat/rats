@@ -1,63 +1,62 @@
 #pragma once
 
-#include "meta_info.hpp"
+#include "Serializer.hpp"
 #include "gui.hpp"
-#include "Coordinates.hpp"
 #include "vectors.hpp"
-#include "math.hpp"
 
-#include "Input.hpp"
-#include "InputSettings.hpp"
-
-struct EditorCamera
+struct CameraGpuData
 {
-	float pan = 0;
-	float tilt = 0;
-	float3 position = float3(0,3,-10);
+	float4x4 	view_matrix;
+	float4 		max_distance;
+	float4 		render_bounds_min;
+	float4 		render_bounds_max;
+};
 
-	float move_speed = 10;
-
-	bool enabled = false;
+struct Camera
+{
+	float max_distance = 50; 	// drawing
+	float field_of_view = 1.6; 	// totally arbitrary unit
 
 	float4x4 view_matrix;
 
-	float3 right() const;
-	float3 up() const;
-	float3 forward() const;
+	CameraGpuData get_gpu_data()
+	{
+		return
+		{
+			view_matrix,
+			float4(max_distance, field_of_view, 0, 0)
+		};
+	}
 };
 
-inline SERIALIZE_STRUCT(EditorCamera const & camera)
+inline SERIALIZE_STRUCT(Camera const & camera)
 {
-	serializer.write("pan", camera.pan);
-	serializer.write("tilt", camera.tilt);
-	serializer.write("position", camera.position);
-	serializer.write("move_speed", camera.move_speed);
-	serializer.write("enabled", camera.enabled);
+	serializer.write("max_distance", camera.max_distance);
+	serializer.write("field_of_view", camera.field_of_view);
 }
 
-inline DESERIALIZE_STRUCT(EditorCamera & camera)
+inline DESERIALIZE_STRUCT(Camera & camera)
 {
-	serializer.read("pan", camera.pan);
-	serializer.read("tilt", camera.tilt);
-	serializer.read("position", camera.position);
-	serializer.read("move_speed", camera.move_speed);
-	serializer.read("enabled", camera.enabled);
+	serializer.read("max_distance", camera.max_distance);
+	serializer.read("field_of_view", camera.field_of_view);
 }
 
 namespace gui
 {
-	inline bool edit(EditorCamera & c)//, Gui gui)
+	inline bool edit(Camera & camera)
 	{
 		auto gui = gui_helper();
-		gui.edit("pan", c.pan);
-		gui.edit("tilt", c.tilt);
-		gui.edit("position", c.position);
-		gui.edit("move_speed", c.move_speed);
-		gui.edit("enabled", c.enabled);
+
+		gui.edit("max_distance", camera.max_distance);
+		gui.edit("field_of_view", camera.field_of_view);
+
 		return gui.dirty;
 	}
 }
 
+
+// this really has nothing to do with camera, only controllers, but now this the common header so here it is
+#include "Input.hpp"
 struct CameraInput
 {
 	float3 move;
@@ -82,73 +81,3 @@ CameraInput get_camera_input(Input * input, InputSettings const & input_settings
 
 	return result;
 };
-
-void update_camera(EditorCamera & camera, CameraInput const & input)
-{
-	if (camera.enabled)
-	{
-		camera.pan += input.look.x;
-		camera.tilt += input.look.y;
-	}
-
-	float camera_angle_radians = rats::to_radians(camera.pan);
-	float s = sin(camera_angle_radians);
-	float c = cos(camera_angle_radians);
-
-	float4x4 pan_transform =
-	{
-		c, 0, -s, 0,
-		0, 1, 0, 0,
-		s, 0, c, 0,
-		0, 0, 0, 1
-	};
-
-	float tilt_angle_radians = rats::to_radians(camera.tilt);
-	float ts = sin(tilt_angle_radians);
-	float tc = cos(tilt_angle_radians);
-
-	float4x4 tilt_transform =
-	{
-		1, 0, 0, 0,
-		0, tc, ts, 0,
-		0, -ts, tc, 0,
-		0, 0, 0, 1
-	};
-
-	// Note(Leo): this is like "rotation_YXZ"???
-	// multiply_matrix(pan_transform, tilt_transform, camera.view_matrix);
-	camera.view_matrix = pan_transform * tilt_transform;
-
-
-	float3 movement = float3(input.move.x, 0, input.move.z);
-	movement = multiply_vector(camera.view_matrix, movement);
-	movement.y += input.move.y;
-
-	float movement_length = length(movement);
-	if (movement_length > 1)
-	{
-		movement /= movement_length;
-	}
-	movement *= input.delta_time * camera.move_speed;
-
-	if (camera.enabled)
-	{
-		camera.position += movement;
-	}
-	camera.view_matrix.column(3) = float4(camera.position, 1);
-}
-
-float3 EditorCamera::right() const
-{
-	return view_matrix.column(0).xyz;
-}
-
-float3 EditorCamera::up() const
-{
-	return view_matrix.column(1).xyz;
-}
-
-float3 EditorCamera::forward() const
-{
-	return view_matrix.column(2).xyz;
-}

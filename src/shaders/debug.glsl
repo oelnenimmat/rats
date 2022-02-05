@@ -1,68 +1,68 @@
 #ifndef DEBUG_GLSL_INCLUDED
 #define DEBUG_GLSL_INCLUDED
 
-bool draw_bounds(Ray camera_ray)
+bool draw_bounds(Ray camera_ray, vec3 min, vec3 max)
 {
-	if (camera.draw_options.z == 0)
+	if (per_frame.draw_options.draw_options.z == 0)
 	{
 		return false;
 	}
 
+	const float width = 0.05;
 
-	const float width = 0.1;
+	vec3 bounds_min = min;
+	vec3 bounds_max = max;
 
-	vec3 world_size = get_render_bounds();
-
-	const vec3 bound_mins [12] = vec3[]
+	const vec3 mins [12] = vec3[]
 	(
-		vec3(0,	0,0),
-		vec3(0, world_size.y - width, 0),
-		vec3(0, 0, world_size.z - width),
-		vec3(0, world_size.y - width, world_size.z - width),
+		vec3(bounds_min.x, 			bounds_min.y, 			bounds_min.z),
+		vec3(bounds_min.x, 			bounds_max.y - width, 	bounds_min.z),
+		vec3(bounds_min.x, 			bounds_min.y, 			bounds_max.z - width),
+		vec3(bounds_min.x, 			bounds_max.y - width, 	bounds_max.z - width),
 
-		vec3(0,	0,0),
-		vec3(world_size.x - width, 0, 0),
-		vec3(0, 0, world_size.z - width),
-		vec3(world_size.x - width, 0, world_size.z - width),
+		vec3(bounds_min.x,			bounds_min.y, 			bounds_min.z),
+		vec3(bounds_max.x - width, 	bounds_min.y, 			bounds_min.z),
+		vec3(bounds_min.x, 			bounds_min.y, 			bounds_max.z - width),
+		vec3(bounds_max.x - width, 	bounds_min.y, 			bounds_max.z - width),
 
-		vec3(0,	0,0),
-		vec3(world_size.x - width, 0, 0),
-		vec3(0, world_size.y - width, 0),
-		vec3(world_size.x - width, world_size.y - width, 0)
+		vec3(bounds_min.x,			bounds_min.y,			bounds_min.z),
+		vec3(bounds_max.x - width, 	bounds_min.y, 			bounds_min.z),
+		vec3(bounds_min.x, 			bounds_max.y - width, 	bounds_min.z),
+		vec3(bounds_max.x - width, 	bounds_max.y - width, 	bounds_min.z)
 	);
 
-	const vec3 bound_maxs[12] = vec3[]
+	const vec3 maxs[12] = vec3[]
 	(
-		vec3(world_size.x, width, width),
-		vec3(world_size.x, world_size.y, width),
-		vec3(world_size.x, width, world_size.z),
-		vec3(world_size.x, world_size.y, world_size.z),
+		vec3(bounds_max.x, 			bounds_min.y + width, 	bounds_min.z + width),
+		vec3(bounds_max.x, 			bounds_max.y, 			bounds_min.z + width),
+		vec3(bounds_max.x, 			bounds_min.y + width, 	bounds_max.z),
+		vec3(bounds_max.x, 			bounds_max.y, 			bounds_max.z),
 
-		vec3(width, world_size.y, width),
-		vec3(world_size.x, world_size.y, width),
-		vec3(width, world_size.y, world_size.z),
-		vec3(world_size.x, world_size.y, world_size.z),
+		vec3(bounds_min.x + width, 	bounds_max.y, 			bounds_min.z + width),
+		vec3(bounds_max.x, 			bounds_max.y, 			bounds_min.z + width),
+		vec3(bounds_min.x + width, 	bounds_max.y, 			bounds_max.z),
+		vec3(bounds_max.x, 			bounds_max.y, 			bounds_max.z),
 
-		vec3(width, width, world_size.z),
-		vec3(world_size.x, width, world_size.z),
-		vec3(width, world_size.y, world_size.z),
-		vec3(world_size.x, world_size.y, world_size.z)
+		vec3(bounds_min.x + width, 	bounds_min.y + width, 	bounds_max.z),
+		vec3(bounds_max.x, 			bounds_min.y + width, 	bounds_max.z),
+		vec3(bounds_min.x + width, 	bounds_max.y, 			bounds_max.z),
+		vec3(bounds_max.x, 			bounds_max.y, 			bounds_max.z)
 	);
 
 	float ignored_out_distance;
 	if (
-		raycast(camera_ray, bound_mins[0], bound_maxs[0], 100, ignored_out_distance) ||
-		raycast(camera_ray, bound_mins[1], bound_maxs[1], 100, ignored_out_distance) ||
-		raycast(camera_ray, bound_mins[2], bound_maxs[2], 100, ignored_out_distance) ||
-		raycast(camera_ray, bound_mins[3], bound_maxs[3], 100, ignored_out_distance) ||
-		raycast(camera_ray, bound_mins[4], bound_maxs[4], 100, ignored_out_distance) ||
-		raycast(camera_ray, bound_mins[5], bound_maxs[5], 100, ignored_out_distance) ||
-		raycast(camera_ray, bound_mins[6], bound_maxs[6], 100, ignored_out_distance) ||
-		raycast(camera_ray, bound_mins[7], bound_maxs[7], 100, ignored_out_distance) ||
-		raycast(camera_ray, bound_mins[8], bound_maxs[8], 100, ignored_out_distance) ||
-		raycast(camera_ray, bound_mins[9], bound_maxs[9], 100, ignored_out_distance) ||
-		raycast(camera_ray, bound_mins[10], bound_maxs[10], 100, ignored_out_distance) ||
-		raycast(camera_ray, bound_mins[11], bound_maxs[11], 100, ignored_out_distance)
+		raycast(camera_ray, mins[0], maxs[0], 100, ignored_out_distance) ||
+		raycast(camera_ray, mins[1], maxs[1], 100, ignored_out_distance) ||
+		raycast(camera_ray, mins[2], maxs[2], 100, ignored_out_distance) ||
+		raycast(camera_ray, mins[3], maxs[3], 100, ignored_out_distance) ||
+		raycast(camera_ray, mins[4], maxs[4], 100, ignored_out_distance) ||
+		raycast(camera_ray, mins[5], maxs[5], 100, ignored_out_distance) ||
+		raycast(camera_ray, mins[6], maxs[6], 100, ignored_out_distance) ||
+		raycast(camera_ray, mins[7], maxs[7], 100, ignored_out_distance) ||
+		raycast(camera_ray, mins[8], maxs[8], 100, ignored_out_distance) ||
+		raycast(camera_ray, mins[9], maxs[9], 100, ignored_out_distance) ||
+		raycast(camera_ray, mins[10], maxs[10], 100, ignored_out_distance) ||
+		raycast(camera_ray, mins[11], maxs[11], 100, ignored_out_distance)
 	)
 	{
 		return true;
