@@ -95,6 +95,7 @@ enum struct ComputeShaderDrawMode : int
 	lit = 0,
 	albedo,
 	normals,
+	depth,
 
 	COUNT
 };
@@ -115,6 +116,7 @@ namespace gui
 			"lit",
 			"albedo",
 			"normals",
+			"depth"
 		};
 		int * value = reinterpret_cast<int*>(&m);;
 		return Combo(label, value, c_strings, (int)ComputeShaderDrawMode::COUNT);

@@ -40,10 +40,7 @@ VoxelData get_chunktree_voxel(const ivec3 voxel, int range_index)
 vec4 _traverse_chunktree_lights(const Ray ray, float max_distance, int range_index)
 {
 	ivec3 voxels_in_chunk = ivec3(get_voxels_in_chunk());
-	// ivec3 chunks_in_world = get_chunks_in_range(range_index);
-	// ivec3 voxels_in_world = voxels_in_chunk * chunks_in_world;
 
-	float t_start = 0;
 
 	vec4 color = vec4(0,0,0,1);
 
@@ -59,6 +56,7 @@ vec4 _traverse_chunktree_lights(const Ray ray, float max_distance, int range_ind
 	vec3 min_bound = get_chunk_range_min(range_index) * get_CS_to_WS();
 	vec3 max_bound = get_chunk_range_max(range_index) * get_CS_to_WS();
 
+	float t_start = 0;
 	if (raycast(ray, min_bound, max_bound, max_distance + 1, t_start) == false)
 	{
 		return color;
@@ -162,8 +160,10 @@ vec4 _traverse_chunktree_lights(const Ray ray, float max_distance, int range_ind
 	return color;
 }
 
-vec4 _traverse_chunktree(const Ray ray, float max_distance, int range_index)
+vec4 _traverse_chunktree(const Ray ray, float max_distance, int range_index, out float out_depth)
 {
+	vec4 color = vec4(0,0,0,0);
+	out_depth = max_distance;
 
 	// this means we are totally outside of defined regions, we can quit early
 	vec3 min_bound = get_chunk_range_min(range_index) * get_CS_to_WS();
@@ -172,7 +172,7 @@ vec4 _traverse_chunktree(const Ray ray, float max_distance, int range_index)
 	float t_start;
 	if (raycast(ray, min_bound, max_bound, max_distance + 1, t_start) == false)
 	{
-		return vec4(0,0,0,0);
+		return color;
 	}
 
 
@@ -196,26 +196,15 @@ vec4 _traverse_chunktree(const Ray ray, float max_distance, int range_index)
 	const ivec3 voxel_range_min = get_chunk_range_min(range_index) * get_voxels_in_chunk();
 	const ivec3 voxel_range_max = get_chunk_range_max(range_index) * get_voxels_in_chunk();
 	const ivec3 just_out = ivec3(
-		dir.x < 0 ? voxel_range_min.x - 1 : voxel_range_max.x, /// min max bounds
+		dir.x < 0 ? voxel_range_min.x - 1 : voxel_range_max.x,
 		dir.y < 0 ? voxel_range_min.y - 1 : voxel_range_max.y,
 		dir.z < 0 ? voxel_range_min.z - 1 : voxel_range_max.z
 	);
 
 	float t_WS = 0;
 
-	vec4 color = vec4(0,0,0,0);
-
-	// if (range_index == 1)
-	// {
-	// 	color = vec4(0,0,1,0.9);
-	// }
-	// else
-	// {
-	// 	color = vec4(1,1,0,1);
-	// }
 
 
-	// insanity
 	int sanity_check = 1000;
 	while(sanity_check > 0)
 	{
@@ -234,8 +223,7 @@ vec4 _traverse_chunktree(const Ray ray, float max_distance, int range_index)
 		if (chunk_is_empty(voxel, range_index))
 		{
 			// CS = Chunk Space
-			float WS_to_CS 								= get_WS_to_CS();
-			vec3 position_CS 							= position_WS * WS_to_CS;
+			vec3 position_CS 							= position_WS * get_WS_to_CS();
 			vec3 t_max_CS 								= (step(0, direction_VS) - fract(position_CS)) / direction_VS;
 			vec3 t_max_WS 								= t_max_CS * get_CS_to_WS();
 			float t_max_min_WS 							= min(min(t_max_WS.x, t_max_WS.y), t_max_WS.z);
@@ -246,12 +234,13 @@ vec4 _traverse_chunktree(const Ray ray, float max_distance, int range_index)
 			continue;
 		}
 
-		int local_depth;
 		VoxelData data = get_chunktree_voxel(voxel, range_index);
 
 		int material = get_material(data);
 		if (material > 0)
 		{
+			float depth = (t_WS + t_start) / max_distance;
+
 			int draw_mode = get_draw_mode();
 			if (draw_mode == DRAW_MODE_LIT)
 			{
@@ -295,6 +284,12 @@ vec4 _traverse_chunktree(const Ray ray, float max_distance, int range_index)
 			{
 				color = vec4((data.normal.xyz + 1) / 2, 1);
 			}
+			else if (draw_mode == DRAW_MODE_DEPTH)
+			{
+				color = vec4(depth, depth, depth, 1);
+			}
+		
+			out_depth = depth;
 
 			break;
 		}
@@ -312,12 +307,13 @@ vec4 _traverse_chunktree(const Ray ray, float max_distance, int range_index)
 		color = vec4(1,0,1,1);
 	}
 
+
 	return color;
 }
 
-vec4 traverse_voxels(Ray ray, float max_distance, int range_index)
+vec4 traverse_voxels(Ray ray, float max_distance, int range_index, out float out_depth)
 {
-	return _traverse_chunktree(ray, max_distance, range_index);
+	return _traverse_chunktree(ray, max_distance, range_index, out_depth);
 }
 
 #endif // VOXEL_CHUNKTREE_GLSL_INCLUDED
