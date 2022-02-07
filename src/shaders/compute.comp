@@ -133,6 +133,14 @@ Ray get_camera_ray()
 // 	return src_alpha * source.rgb + one_minus_src_alpha * destination.rgb;
 // }
 
+bool draw_bounds_2(Ray ray, int map_index)
+{
+	// This is wasteful way of doing this. Either do separate compute shader, or actual grpahics pipeline with lines
+	vec3 chunk_range_bounds_min = voxel_world_info.ranges[map_index].offset.xyz * get_CS_to_WS();
+	vec3 chunk_range_bounds_max = (voxel_world_info.ranges[map_index].offset.xyz + voxel_world_info.ranges[map_index].size.xyz) * get_CS_to_WS();
+	return draw_bounds(ray, chunk_range_bounds_min, chunk_range_bounds_max);
+}
+
 void main()
 {
 
@@ -153,47 +161,46 @@ void main()
 	vec3 color = background_color;
 	// color = vec3(0,0,0);
 
-	float depth_a;
-	float depth_b;
+	// ------------------------------------------------
+	float max_distance = get_max_distance();
 
-	vec4 ray_result_color_a = traverse_voxels(camera_ray, get_max_distance(), 0, depth_a);
-	vec4 ray_result_color_b = traverse_voxels(camera_ray, get_max_distance(), 1, depth_b);
+	vec4 ray_color;
+	float ray_depth = 1;
 
-	// depth_a /= get_max_distance();
-	// depth_b /= get_max_distance();
-
-	float depth = min(depth_a, depth_b);
-
-	vec4 ray_result_color = ray_result_color_a;
-	if (depth_b < depth_a)
+	for (int i = 0; i < get_voxel_map_count(); i++)
 	{
-		ray_result_color = ray_result_color_b;
+		float current_depth = 1;
+		vec4 current_color = traverse_voxels(camera_ray, max_distance, i, current_depth);
+
+		if (current_depth <= ray_depth)
+		{
+			ray_color = current_color;
+			ray_depth = current_depth;
+		}
 	}
 
+	vec4 ray_result_color = ray_color;
+	float depth = ray_depth;
 
-	color = mix(ray_result_color, color, depth);
+	color = mix(ray_result_color.rgb, color, depth);
 
-	vec3 debug_color = vec3(0, 0.8, 0.8);
 
 	// This is wasteful way of doing this. Either do separate compute shader, or actual grpahics pipeline with lines
-	if (draw_bounds(camera_ray, get_render_bounds_min(), get_render_bounds_max()))
-	{
-		color = debug_color;
-	}
-
-	vec3 chunk_range_bounds_min = voxel_world_info.chunk_range_offset.xyz * get_CS_to_WS();
-	vec3 chunk_range_bounds_max = (voxel_world_info.chunk_range_offset.xyz + voxel_world_info.chunk_range_size.xyz) * get_CS_to_WS();
-	if (draw_bounds(camera_ray, chunk_range_bounds_min, chunk_range_bounds_max))
+	if (draw_bounds_2(camera_ray, 0))
 	{
 		color = vec3(0.8, 0.1, 0.5);
 	}
 
-	vec3 chunk_range_bounds_min_2 = voxel_world_info.chunk_range_offset_2.xyz * get_CS_to_WS();
-	vec3 chunk_range_bounds_max_2 = (voxel_world_info.chunk_range_offset_2.xyz + voxel_world_info.chunk_range_size_2.xyz) * get_CS_to_WS();
-	if (draw_bounds(camera_ray, chunk_range_bounds_min_2, chunk_range_bounds_max_2))
+	if (draw_bounds_2(camera_ray, 1))
 	{
 		color = vec3(0.1, 0.8, 0.5);
 	}
+
+	if (draw_bounds_2(camera_ray, 2))
+	{
+		color = vec3(0, 0.8, 0.8);
+	}
+
 
 	// color = vec3(depth, depth, depth);
 	vec4 result = vec4(color, 1);    

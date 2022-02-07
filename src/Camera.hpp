@@ -3,6 +3,7 @@
 #include "Serializer.hpp"
 #include "gui.hpp"
 #include "vectors.hpp"
+#include "InputSettings.hpp"
 
 struct CameraGpuData
 {

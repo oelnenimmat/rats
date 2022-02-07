@@ -19,7 +19,7 @@ struct CharacterInput
 	bool reset;
 };
 
-CharacterInput get_character_input(Input * input, GameCameraController const & camera)
+CharacterInput get_player_input_for_character(Input * input, GameCameraController const & camera)
 {
 	CharacterInput result = {};
 
@@ -183,3 +183,22 @@ struct CharacterUpdateJob
 		character.grounded_position = move_end_position;
 	}
 };
+
+struct DebugCharacterStateController
+{
+	float timer_to_jump = 0;
+};
+
+CharacterInput get_debug_input_for_character(DebugCharacterStateController & controller, float delta_time)
+{
+	CharacterInput input = {};
+
+	controller.timer_to_jump -= delta_time;
+	if (controller.timer_to_jump < 0)
+	{
+		input.jump = true;
+		controller.timer_to_jump += 5;
+	}
+
+	return input;
+}

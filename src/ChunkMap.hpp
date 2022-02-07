@@ -6,6 +6,8 @@ struct ChunkMap
 	int3 chunk_count;
 	int voxel_count_in_chunk;
 
+	// this lets this be used with owned and loaned memory. all accesses are always done to slice, and 
+	// if this owns memory, it is in array
 	Array<T> memory;
 	Slice<T> nodes;
 

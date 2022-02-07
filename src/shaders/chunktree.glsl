@@ -97,7 +97,7 @@ vec4 _traverse_chunktree_lights(const Ray ray, float max_distance, int range_ind
 
 		if ((t_start + t_WS) > max_distance)
 		{
-			return color;
+			break;
 		}
 
 		vec3 position_WS = start_WS + direction_WS * t_WS;
@@ -163,7 +163,7 @@ vec4 _traverse_chunktree_lights(const Ray ray, float max_distance, int range_ind
 vec4 _traverse_chunktree(const Ray ray, float max_distance, int range_index, out float out_depth)
 {
 	vec4 color = vec4(0,0,0,0);
-	out_depth = max_distance;
+	out_depth = 1;
 
 	// this means we are totally outside of defined regions, we can quit early
 	vec3 min_bound = get_chunk_range_min(range_index) * get_CS_to_WS();
@@ -210,6 +210,11 @@ vec4 _traverse_chunktree(const Ray ray, float max_distance, int range_index, out
 	{
 		sanity_check -= 1;
 
+		if ((t_WS + t_start) > max_distance)
+		{
+			break;
+		}
+
 		vec3 position_WS = start_WS + direction_WS * t_WS;
 		vec3 position_VS = position_WS * WS_to_VS;
 		ivec3 voxel = ivec3(floor(position_VS));
@@ -218,7 +223,7 @@ vec4 _traverse_chunktree(const Ray ray, float max_distance, int range_index, out
 		if (any(equal(voxel, just_out))) // Apparently this is not needed, but I am  not sure yet: || outside_bounds(position_WS))
 		{
 			break;
-		}
+		}	
 
 		if (chunk_is_empty(voxel, range_index))
 		{
