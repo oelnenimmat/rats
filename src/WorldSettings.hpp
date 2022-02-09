@@ -9,8 +9,8 @@ struct WorldSettings
 	float world_size;
 	Gradient colors;
 
-	int3 island_1_position;
-	int3 island_2_position;
+	float3 island_1_position;
+	float3 island_2_position;
 };
 
 inline SERIALIZE_STRUCT(WorldSettings const & world_settings)

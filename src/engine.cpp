@@ -166,8 +166,10 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 	init(engine.renderer, &engine.draw_options, graphics);
 
 	// Game systems?
+	// init(world); // like load game stuff?
+ 
 	engine.debug_terrain.init(engine.debug_terrain_settings);
-	engine.grass.init(engine.grass_settings, global_debug_allocator, engine.debug_terrain);
+	init(engine.grass, &engine.grass_settings, &global_debug_allocator, &engine.debug_terrain);
 
 	// todo: make mouse system, and init it
 	for (int i = 0; i < array_length(engine.mouses); i++)
@@ -190,7 +192,8 @@ void update_engine(Engine & engine)
 
 	if (engine.events.recreate_world)
 	{
-		int3 chunks_in_map_2 		= int3(1,2,1);
+		int3 chunks_in_character 	= int3(1,2,1);
+		int3 chunks_for_grass 		= int3(4,4,4);
 
 		// todo: dont do this, we only want to recreate world, not the renderer
 		engine.renderer.island_1.map.dispose();
@@ -209,11 +212,13 @@ void update_engine(Engine & engine)
 			engine.draw_options.voxel_settings.voxels_in_chunk
 		);
 
-		allocate_chunks(engine.renderer, engine.draw_options.voxel_settings.chunks_in_world, engine.renderer.island_1.map);
-		allocate_chunks(engine.renderer, engine.draw_options.voxel_settings.chunks_in_world, engine.renderer.island_2.map);
-		allocate_chunks(engine.renderer, chunks_in_map_2, engine.renderer.player_voxel_object.map);
-		allocate_chunks(engine.renderer, chunks_in_map_2, engine.renderer.npc_voxel_object.map);
-		
+		allocate_chunks(engine.renderer, engine.draw_options.voxel_settings.chunks_in_world, engine.renderer.island_1);
+		allocate_chunks(engine.renderer, engine.draw_options.voxel_settings.chunks_in_world, engine.renderer.island_2);
+		allocate_chunks(engine.renderer, chunks_in_character, engine.renderer.player_voxel_object);
+		allocate_chunks(engine.renderer, chunks_in_character, engine.renderer.npc_voxel_object);
+		// allocate_chunks(engine.renderer, chunks_in_character, engine.renderer.grass_voxel_object);
+		allocate_chunks(engine.renderer, chunks_for_grass, engine.renderer.grass_voxel_object);
+
 		// generate_test_world_in_thread(
 		generate_test_world(
 			engine.renderer.island_1,
@@ -233,7 +238,6 @@ void update_engine(Engine & engine)
 			&engine.world_generation_progress
 		);
 		engine.renderer.island_2.position_VS = int3(50, 0, 0);
-
 
 		TIME_FUNCTION(
 			draw_cuboid(
@@ -369,7 +373,7 @@ void update_engine(Engine & engine)
 	};
 
 	jobs.enqueue_parallel(mouse_update_job, array_length(engine.mouses));
-	jobs.enqueue_parallel(get_grass_update_job(engine.grass, scaled_delta_time), engine.grass.roots.length());
+	jobs.enqueue_parallel(get_grass_update_job(engine.grass, scaled_delta_time), engine.grass.roots_WS.length());
 
 	// Jobs are just discarded if we are paused. Ofc they shouln't be created, but we are still
 	// experimenting so this is okay
@@ -413,6 +417,14 @@ void render_engine(Engine & engine)
 				engine.renderer.npc_voxel_object
 			);		
 
+
+			update_position(
+				engine.renderer,
+				engine.grass.settings->chunk_world_position,
+				engine.debug_character.size,
+				engine.renderer.grass_voxel_object
+			);		
+
 			// TIMER_BEGIN(draw_mouses);
 			// for (MouseState const & mouse : engine.mouses)
 			// {
@@ -420,16 +432,25 @@ void render_engine(Engine & engine)
 			// 	draw_cuboid(engine.renderer, mouse.position, 0.125, color, 0);
 			// }
 			// TIMER_END(engine.timings, draw_mouses);
-
-			float3 world_size = float3(engine.world_settings.world_size);
-			TIME_FUNCTION(draw_grass(engine.grass, engine.renderer, world_size), engine.timings.draw_grass);
 		}
+	
+		float3 world_size = float3(engine.world_settings.world_size);
+		TIME_FUNCTION(draw_grass(
+			engine.grass,
+			engine.renderer,
+			world_size,
+			int3(0,0,0)
+		), engine.timings.draw_grass);
 
 	TIMER_END(engine.timings, draw_to_octree);
 
 		// Set island positions
-		engine.renderer.island_1.position_VS = engine.world_settings.island_1_position;
-		engine.renderer.island_2.position_VS = engine.world_settings.island_2_position;
+		engine.renderer.island_1.position_VS = int3(floor(
+			engine.world_settings.island_1_position * engine.draw_options.voxel_settings.WS_to_VS()
+		));
+		engine.renderer.island_2.position_VS = int3(floor(
+			engine.world_settings.island_2_position * engine.draw_options.voxel_settings.WS_to_VS()
+		));
 
 	TIMER_BEGIN(setup_draw_buffers);
 
@@ -453,11 +474,12 @@ void render_engine(Engine & engine)
 
 	TIMER_BEGIN(copy_to_graphics);
 
+		// Todo(Leo): this is still problematic, since we are not synced with rendering, and this might be updated from cpu
+		// (voxel renderer) while being copied to actual gpu buffer. Now it could be fixed by setting virtual frame
+		// count to 1, but i am not sure if I want to do that yet. It might be okay though.	
+		// also, for some reason these work even if we are supposed to write to first virtual frame's buffer only.
 		if (engine.events.recreate_world)
 		{
-			// Todo(Leo): this is still problematic, since we are not synced with rendering, and this might be updated from cpu
-			// (voxel renderer) while being copied to actual gpu buffer. Now it could be fixed by setting virtual frame
-			// count to 1, but i am not sure if I want to do that yet. It might be okay though.	
 
 			graphics_buffer_apply(
 				graphics,
@@ -486,8 +508,15 @@ void render_engine(Engine & engine)
 				renderer.island_2.map.data_start * sizeof(VoxelData),
 				renderer.island_2.map.nodes.memory_size()
 			);
-
 		}
+
+		// this is updated every frame, so it needs to be applied every frame
+		graphics_buffer_apply(
+			graphics,
+			renderer.voxel_data_buffer_handle,
+			renderer.grass_voxel_object.map.data_start * sizeof(VoxelData),
+			renderer.grass_voxel_object.map.nodes.memory_size()
+		);
 
 		graphics_write_buffer(graphics, renderer.voxel_info_buffer_handle, sizeof voxel_world_info, &voxel_world_info);
 		graphics_write_buffer(graphics, renderer.per_frame_uniform_buffer_handle, sizeof per_frame_uniform_buffer, &per_frame_uniform_buffer);

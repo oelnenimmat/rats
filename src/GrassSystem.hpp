@@ -25,6 +25,7 @@ struct GrassSettings
 	float 			flower_probability;
 	float2  		world_min;
 	float2  		world_max;
+	float3 			chunk_world_position;
 };
 
 inline SERIALIZE_STRUCT(GrassSettings const & grass_settings)
@@ -41,6 +42,7 @@ inline SERIALIZE_STRUCT(GrassSettings const & grass_settings)
 	serializer.write("flower_probability", grass_settings.flower_probability);
 	serializer.write("world_min", grass_settings.world_min);
 	serializer.write("world_max", grass_settings.world_max);
+	serializer.write("chunk_world_position", grass_settings.chunk_world_position);
 }
 
 inline DESERIALIZE_STRUCT(GrassSettings & grass_settings)
@@ -57,6 +59,7 @@ inline DESERIALIZE_STRUCT(GrassSettings & grass_settings)
 	serializer.read("flower_probability", grass_settings.flower_probability);
 	serializer.read("world_min", grass_settings.world_min);
 	serializer.read("world_max", grass_settings.world_max);
+	serializer.read("chunk_world_position", grass_settings.chunk_world_position);
 }
 
 namespace gui
@@ -76,6 +79,7 @@ namespace gui
 		gui.edit("flower_probability", grass_settings.flower_probability);
 		gui.edit("world_min", grass_settings.world_min);
 		gui.edit("world_max", grass_settings.world_max);
+		gui.edit("chunk_world_position", grass_settings.chunk_world_position);
 		return gui.dirty;
 	}
 }
@@ -105,35 +109,24 @@ struct GrassSystem
 	float2 	wind_noise_offset;
 
 	bool created = false;
-	Array<float3> roots = {};
-	Array<float3> tips = {};
+	Array<float3> roots_WS = {};
+	Array<float3> tips_LS = {};
 
-	void init(
-		GrassSettings & settings,
-		DEBUG_Allocator & allocator,
-		DebugTerrain const & terrain
-		// NoiseSettings const & noise_settings
-	)
-	{
-		this->settings = &settings;
-		this->allocator = &allocator;
-		this->terrain = &terrain;
-	}
 
 	// ~GrassSystem()
 	// {
 	// 	if (created)
 	// 	{
-	// 		roots.dispose();
-	// 		tips.dispose();
+	// 		roots_WS.dispose();
+	// 		tips_LS.dispose();
 	// 	}
 	// }
 };
 
 struct GrassUpdateJob
 {
-	Slice<float3> 	roots;
-	Slice<float3> 	tips;
+	Slice<float3> 	roots_WS;
+	Slice<float3> 	tips_LS;
 
 	float 	wind_strength;
 	float2 	wind_noise_offset;
@@ -142,7 +135,7 @@ struct GrassUpdateJob
 
 	void execute(int i)
 	{
-		float3 root = roots[i];
+		float3 root = roots_WS[i];
 
 		float2 noise_sample_position_x = root.xz;
 		float2 noise_sample_position_z = float2(-root.x - root.y, root.z + root.y);
@@ -151,7 +144,7 @@ struct GrassUpdateJob
 		float noise_z = wind_noise.evaluate(noise_sample_position_z + wind_noise_offset);
 
 		float length = grass_length.evaluate(SmallXXHash::seed(i).get_float_A_01());
-		tips[i] = normalize(float3(noise_x * wind_strength, 1, noise_z * wind_strength)) * length;
+		tips_LS[i] = normalize(float3(noise_x * wind_strength, 1, noise_z * wind_strength)) * length;
 	}
 };
 
@@ -160,8 +153,8 @@ GrassUpdateJob get_grass_update_job(GrassSystem & grass, float delta_time)
 	grass.wind_noise_offset += grass.settings->wind_noise_move_speed * delta_time;
 
 	GrassUpdateJob job 		= {};
-	job.roots 				= make_slice(grass.roots, 0, grass.roots.length());
-	job.tips 				= make_slice(grass.tips, 0, grass.tips.length());
+	job.roots_WS 				= make_slice(grass.roots_WS, 0, grass.roots_WS.length());
+	job.tips_LS 				= make_slice(grass.tips_LS, 0, grass.tips_LS.length());
 	job.wind_strength 		= grass.settings->wind_strength;
 	job.wind_noise_offset 	= grass.wind_noise_offset;
 	job.wind_noise 			= make_noise(grass.settings->wind_noise_settings);
@@ -179,28 +172,43 @@ void generate_grass(GrassSystem & grass)
 {
 	if (grass.created)
 	{
-		grass.roots.dispose();
-		grass.tips.dispose();
+		grass.roots_WS.dispose();
+		grass.tips_LS.dispose();
 	}
 
-	grass.roots = Array<float3>(grass.settings->count, *grass.allocator);
-	grass.tips = Array<float3>(grass.settings->count, *grass.allocator);
+	grass.roots_WS = Array<float3>(grass.settings->count, *grass.allocator);
+	grass.tips_LS = Array<float3>(grass.settings->count, *grass.allocator);
 
 	// Noise2D noise = make_noise(*grass.noise_settings);
 
-	for(int i = 0; i < grass.roots.length(); i++)
+	for(int i = 0; i < grass.roots_WS.length(); i++)
 	{
 		float3 position;
 		position.xz = random_float2(grass.settings->world_min, grass.settings->world_max);
 		position.y = grass.terrain->get_height(position.xz);
-		grass.roots[i] = position;
+		grass.roots_WS[i] = position;
 
 		// float length = random_float(0.9, 1.1) * grass.settings->length;
-		// grass.tips[i] = normalize(grass.settings->direction) * length;
+		// grass.tips_LS[i] = normalize(grass.settings->direction) * length;
 	}
 
 	grass.created = true;
 }
+
+void init(
+	GrassSystem & grass,
+	GrassSettings * settings,
+	DEBUG_Allocator * allocator,
+	DebugTerrain const * terrain
+)
+{
+	grass.settings = settings;
+	grass.allocator = allocator;
+	grass.terrain = terrain;
+
+	generate_grass(grass);
+}
+
 
 namespace gui
 {
@@ -220,21 +228,68 @@ namespace gui
 	}
 }
 
-void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 world_size)
+struct bool3
 {
-	/*
+	bool x, y, z;
 
-	if (grass.roots.length() == 0)
+	bool3() : x(false), y(false), z(false) {}
+	bool3(bool x, bool y, bool z) : x(x), y(y), z(z) {}
+};
+
+inline bool3 operator < (float3 const & lhs, float3 const & rhs)
+{
+	return bool3(
+		lhs.x < rhs.x,
+		lhs.y < rhs.y,
+		lhs.z < rhs.z
+	);
+}
+
+bool any(bool3 b)
+{
+	return b.x || b.y || b.z;
+}
+
+// void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 world_size)
+void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 world_size, int3 chunk_range_start)
+{
+	// void draw_cuboid(
+	// VoxelRenderer const & renderer,
+	// float size,
+	// float3 color,
+	// VoxelObject & target
+
+
+
+	clear_slice_data(renderer.grass_voxel_object.map.nodes);
+
+	renderer.grass_voxel_object.position_VS 
+		= int3(floor(grass.settings->chunk_world_position * renderer.draw_options->voxel_settings.WS_to_VS()));
+
+	// draw_cuboid(renderer, 2, grass.settings->colors.evaluate(0).rgb, renderer.grass_voxel_object);
+
+	// return;
+
+	if (grass.roots_WS.length() == 0)
 	{
 		return;
 	}
-
 	float WS_to_VS = renderer.draw_options->voxel_settings.WS_to_VS();
 
-	for (int i = 0; i < grass.roots.length(); i++)
+	float3 range_start_WS 	= grass.settings->chunk_world_position;// * renderer.draw_options->voxel_settings.CS_to_WS();
+	float3 range_size_WS 	= float3(renderer.grass_voxel_object.map.size_in_chunks) * renderer.draw_options->voxel_settings.CS_to_WS();
+	float3 range_end_WS 	= range_start_WS + range_size_WS;
+
+	// std::cout << "[GRASS]: draw " << grass.roots_WS.length() << " grasses\n";
+
+	for (int i = 0; i < grass.roots_WS.length(); i++)
 	{
-		float3 root = grass.roots[i];
-		float3 tip = grass.tips[i];
+		float3 root = grass.roots_WS[i];
+		float3 tip = grass.tips_LS[i];
+
+		root -= range_start_WS;
+
+		// if (any(range_start_WS < root))
 
 		int3 start_VS = int3(floor(root * WS_to_VS));
 		int3 end_VS = int3(floor((root + tip) * WS_to_VS));
@@ -256,7 +311,7 @@ void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 worl
 		float color_t = hash.get_float_B_01();
 		float4 color = grass.settings->colors.evaluate(color_t);
 
-		float3 normal = normalize(grass.tips[i]);
+		float3 normal = normalize(grass.tips_LS[i]);
 
 		for (int y = 0; y < steps; y++)
 		{
@@ -268,7 +323,7 @@ void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 worl
 			int z = floor(tz);
 
 			auto & node = get_node(
-				renderer.world_chunk_map,
+				renderer.grass_voxel_object.map,
 				x + start_VS.x,
 				y + start_VS.y,
 				z + start_VS.z
@@ -293,7 +348,7 @@ void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 worl
 			int z = floor(tz);
 
 			auto & node = get_node(
-				renderer.world_chunk_map,
+				renderer.grass_voxel_object.map,
 				x + start_VS.x,
 				y + start_VS.y,
 				z + start_VS.z
@@ -303,5 +358,4 @@ void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 worl
 			node.color = flower_color;
 		}
 	}
-	*/
 }

@@ -403,32 +403,7 @@ void graphics_draw_frame(Graphics * context)
 	// ------------------------------------------------------
 
 	VkFence apply_staging_buffers_fence = VK_NULL_HANDLE;
-
-
-	// auto apply_cmd = begin_single_use_command_buffer(context);
-	// context->per_frame_buffer_pool.for_each([cmd](ComputeBuffer & buffer)
-	// {
-
-	// 	if(buffer.created && buffer.needs_to_apply)
-	// 	{
-	// 		VkBufferCopy copy =
-	// 		{
-	// 			0,
-	// 			buffer.apply_offset,
-	// 			buffer.apply_size
-	// 		};
-	// 		vkCmdCopyBuffer(cmd, buffer.staging_buffer, buffer.buffer, 1, &copy);
-
-	// 		buffer.needs_to_apply = false;
-	// 		buffer.apply_offset = 0;
-	// 		buffer.apply_size = 0;
-	// 	}
-	// });
-	// execute_single_use_command_buffer(context, apply_cmd);
-
 	
-	
-
 	// ------------------------------------------------------
 
 	BEGIN_TIMER(run_compute);
@@ -710,6 +685,8 @@ namespace
 
 	VkMemoryPropertyFlags memory_properties_from(GraphicsBufferType type)
 	{
+		// return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+		
 		switch(type)
 		{
 			case GraphicsBufferType::storage: return VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -727,9 +704,9 @@ void ComputeBuffer::create(Graphics * context, size_t size, GraphicsBufferType t
 
 	device = context->device;
 
-	size_t SWAG_alignment = 256;
-	single_buffer_memory_size = (size / SWAG_alignment + 1) * SWAG_alignment;
-	size_t total_size = single_buffer_memory_size * context->virtual_frame_count;
+	size_t SWAG_alignment 		= 256;
+	single_buffer_memory_size 	= (size / SWAG_alignment + 1) * SWAG_alignment;
+	size_t total_size 			= single_buffer_memory_size * context->virtual_frame_count;
 
 	VULKAN_HANDLE_ERROR(create_buffer(device, total_size, buffer_usage_from(type), &buffer));
 	VULKAN_HANDLE_ERROR(allocate_buffer_memory(context, buffer, memory_properties_from(type), &memory));
@@ -801,15 +778,10 @@ void * graphics_buffer_get_writeable_memory(Graphics * context, int buffer_handl
 
 void graphics_buffer_apply(Graphics * context, int buffer_handle, size_t data_start, size_t data_length)
 {
-	// ComputeBuffer & buffer = context->per_frame_buffer_pool[buffer_handle];
-	// buffer.needs_to_apply = true;
-	// buffer.apply_offset = 0;
-	// buffer.apply_size = buffer.single_buffer_memory_size;
+	// MINIMA_ASSERT( frame has started and command buffer is available )
+
 
 	ComputeBuffer & buffer = context->per_frame_buffer_pool[buffer_handle];
-	// buffer.needs_to_apply = true;
-	// buffer.apply_offset = 0;
-	// buffer.apply_size = buffer.single_buffer_memory_size;
 
 	int frame_index = context->current_frame_index;
 	auto cmd = get_current_frame(context).command_buffer;
@@ -821,8 +793,4 @@ void graphics_buffer_apply(Graphics * context, int buffer_handle, size_t data_st
 		data_length,
 	};
 	vkCmdCopyBuffer(cmd, buffer.staging_buffer, buffer.buffer, 1, &copy);
-
-	// buffer.needs_to_apply = false;
-	// buffer.apply_offset = 0;
-	// buffer.apply_size = 0;
 }

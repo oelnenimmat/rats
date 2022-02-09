@@ -73,17 +73,13 @@ struct VoxelRenderer
 	// todo: no need to have this as template rn, maybe
 	ChunkMap<VoxelData> chunk_map;
 
-	// ChunkMap<VoxelData> island_1_chunk_map;
-	// ChunkMap<VoxelData> island_2_chunk_map;
-
-	// ChunkMap<VoxelData> player_chunk_map;
-	// ChunkMap<VoxelData> npc_chunk_map;
-
 	VoxelObject island_1;
 	VoxelObject island_2;
 
 	VoxelObject player_voxel_object;
 	VoxelObject npc_voxel_object;
+
+	VoxelObject grass_voxel_object;
 
 	Graphics * graphics;
 	DrawOptions * draw_options;
@@ -111,7 +107,7 @@ struct VoxelRenderer
 		);
 		voxel_world_info.voxels_in_chunk_map_count = int4(
 			draw_options->voxel_settings.voxels_in_chunk,
-			4,
+			5,
 			0,
 			0
 		);
@@ -132,11 +128,15 @@ struct VoxelRenderer
 		voxel_world_info.ranges[3].offset_in_voxels = int4(npc_voxel_object.position_VS, 0);
 		voxel_world_info.ranges[3].size_in_chunks 	= int4(npc_voxel_object.map.size_in_chunks, 0);		
 
+		voxel_world_info.ranges[4].data_start 		= int4(grass_voxel_object.map.data_start, 0, 0, 0);
+		voxel_world_info.ranges[4].offset_in_voxels = int4(grass_voxel_object.position_VS, 0);
+		voxel_world_info.ranges[4].size_in_chunks 	= int4(grass_voxel_object.map.size_in_chunks, 0);		
+
 		return voxel_world_info;
 	}
 };
 
-void allocate_chunks(VoxelRenderer & renderer, int3 chunks, ChunkMap<VoxelData> & out_chunk_map)
+void allocate_chunks(VoxelRenderer & renderer, int3 chunks, VoxelObject & out_object)
 {
 	int chunk_count 	= chunks.x * chunks.y * chunks.z;
 	int voxel_count 	= chunk_count * pow3(renderer.draw_options->voxel_settings.voxels_in_chunk);
@@ -149,15 +149,14 @@ void allocate_chunks(VoxelRenderer & renderer, int3 chunks, ChunkMap<VoxelData> 
 	VoxelData * memory = renderer.voxel_buffer_memory + renderer.voxel_buffer_used;
 	renderer.voxel_buffer_used += element_count;
 
-	out_chunk_map.dispose();
-	out_chunk_map = {};
+	out_object.map.dispose();
+	out_object = {};
 
-	out_chunk_map.chunk_count = chunks;
-	out_chunk_map.size_in_chunks = chunks;
-	out_chunk_map.voxel_count_in_chunk = renderer.draw_options->voxel_settings.voxels_in_chunk;
+	out_object.map.size_in_chunks = chunks;
+	out_object.map.voxel_count_in_chunk = renderer.draw_options->voxel_settings.voxels_in_chunk;
 
-	out_chunk_map.data_start = data_start;
-	out_chunk_map.nodes = make_slice<VoxelData>(element_count, memory);
+	out_object.map.data_start = data_start;
+	out_object.map.nodes = make_slice<VoxelData>(element_count, memory);
 }
 
 void init(VoxelRenderer & renderer, DrawOptions * draw_options, Graphics * graphics)
