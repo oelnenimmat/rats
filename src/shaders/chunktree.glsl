@@ -6,13 +6,13 @@
 #include "voxel_data.glsl"
 
 
-bool chunk_is_empty(const ivec3 voxel, int range_index)
+bool chunk_is_empty(const ivec3 voxel, int map_index)
 {
 	// ivec3 chunk 	= voxel / get_voxels_in_chunk();
-	ivec3 chunk = get_chunk(voxel, range_index);
-	int chunk_index = get_chunk_index(chunk, range_index);
+	ivec3 chunk = get_chunk(voxel, map_index);
+	int chunk_index = get_chunk_index(chunk, map_index);
 
-	int data_index = get_range_data_start(range_index) + chunk_index;
+	int data_index = get_range_data_start(map_index) + chunk_index;
 
 	if (voxel_data[chunk_index].material_child_offset.z == 0)
 	{
@@ -22,15 +22,15 @@ bool chunk_is_empty(const ivec3 voxel, int range_index)
 	return false;
 }
 
-VoxelData get_chunktree_voxel(const ivec3 voxel, int range_index)
+VoxelData get_chunktree_voxel(const ivec3 voxel, int map_index)
 {
 	int voxels_in_chunk = get_voxels_in_chunk();
 
 	// int chunk_index = get_chunk_index(voxel / voxels_in_chunk);
-	int chunk_index = get_chunk_index(get_chunk(voxel, range_index), range_index);
-	int voxel_index = get_voxel_index(voxel % voxels_in_chunk);
+	int chunk_index = get_chunk_index(get_chunk(voxel, map_index), map_index);
+	int voxel_index = get_voxel_index(transform_voxel_to_local_voxel_space(voxel, map_index) % voxels_in_chunk);
 
-	int data_index = get_range_data_start(range_index) + get_voxel_data_start(range_index) 
+	int data_index = get_range_data_start(map_index) + get_voxel_data_start(map_index) 
 					+ chunk_index * voxels_in_chunk * voxels_in_chunk * voxels_in_chunk
 					+ voxel_index;
 
@@ -52,9 +52,9 @@ vec4 _traverse_chunktree_lights(const Ray ray, float max_distance, int range_ind
 
 	// this means we are totally outside of defined regions, we can quit early
 	// we shouldn't need to do this in lights, since we are starting the ray inside quite surely always,
-	// but without it it is slower and visually worse
-	vec3 min_bound = get_chunk_range_min(range_index) * get_CS_to_WS();
-	vec3 max_bound = get_chunk_range_max(range_index) * get_CS_to_WS();
+	// but without it it seems slower and visually worse
+	vec3 min_bound = get_voxel_range_min(range_index) * get_VS_to_WS();
+	vec3 max_bound = get_voxel_range_max(range_index) * get_VS_to_WS();
 
 	float t_start = 0;
 	if (raycast(ray, min_bound, max_bound, max_distance + 1, t_start) == false)
@@ -78,8 +78,8 @@ vec4 _traverse_chunktree_lights(const Ray ray, float max_distance, int range_ind
 	const ivec3 dir = ivec3(sign(direction_VS));
 
 	// Voxel coordinates outside bounds, where we terminate
-	const ivec3 voxel_range_min = get_chunk_range_min(range_index) * get_voxels_in_chunk();
-	const ivec3 voxel_range_max = get_chunk_range_max(range_index) * get_voxels_in_chunk();
+	const ivec3 voxel_range_min = get_voxel_range_min(range_index);
+	const ivec3 voxel_range_max = get_voxel_range_max(range_index);
 	const ivec3 just_out = ivec3(
 		dir.x < 0 ? voxel_range_min.x - 1 : voxel_range_max.x, /// min max bounds
 		dir.y < 0 ? voxel_range_min.y - 1 : voxel_range_max.y,
@@ -166,8 +166,8 @@ vec4 _traverse_chunktree(const Ray ray, float max_distance, int range_index, out
 	out_depth = 1;
 
 	// this means we are totally outside of defined regions, we can quit early
-	vec3 min_bound = get_chunk_range_min(range_index) * get_CS_to_WS();
-	vec3 max_bound = get_chunk_range_max(range_index) * get_CS_to_WS();
+	vec3 min_bound = get_voxel_range_min(range_index) * get_VS_to_WS();
+	vec3 max_bound = get_voxel_range_max(range_index) * get_VS_to_WS();
 
 	float t_start;
 	if (raycast(ray, min_bound, max_bound, max_distance + 1, t_start) == false)
@@ -192,9 +192,8 @@ vec4 _traverse_chunktree(const Ray ray, float max_distance, int range_index, out
 	const ivec3 dir = ivec3(sign(direction_VS));
 
 	// Voxel coordinates outside bounds, where we terminate
-	// const ivec3 just_out = mix(get_chunk_range_min(range_index) - 1, get_chunk_range_max(range_index), lessThan(dir, ivec3(0,0,0)));
-	const ivec3 voxel_range_min = get_chunk_range_min(range_index) * get_voxels_in_chunk();
-	const ivec3 voxel_range_max = get_chunk_range_max(range_index) * get_voxels_in_chunk();
+	const ivec3 voxel_range_min = get_voxel_range_min(range_index);
+	const ivec3 voxel_range_max = get_voxel_range_max(range_index);
 	const ivec3 just_out = ivec3(
 		dir.x < 0 ? voxel_range_min.x - 1 : voxel_range_max.x,
 		dir.y < 0 ? voxel_range_min.y - 1 : voxel_range_max.y,

@@ -190,18 +190,16 @@ void update_engine(Engine & engine)
 
 	if (engine.events.recreate_world)
 	{
-		int total_chunk_count 		= engine.draw_options.voxel_settings.total_chunk_count();
-		int total_voxel_count 		= engine.draw_options.voxel_settings.total_voxel_count_in_world();
-
-		int3 chunks_in_map_2 		= int3(2,3,2);
-		int elements_in_chunk_map_2 = 2*3*2 + 2*3*2* engine.draw_options.voxel_settings.total_voxel_count_in_chunk();
-
-		int total_element_count 	= total_chunk_count + total_voxel_count + 2 * elements_in_chunk_map_2;
-		// size_t voxel_buffer_memory_size = total_element_count * sizeof(VoxelData);
+		int3 chunks_in_map_2 		= int3(1,2,1);
 
 		// todo: dont do this, we only want to recreate world, not the renderer
+		engine.renderer.island_1.map.dispose();
+		engine.renderer.island_2.map.dispose();
+		engine.renderer.player_voxel_object.map.dispose();
+		engine.renderer.npc_voxel_object.map.dispose();
+		reset_allocations(engine.renderer);
+		
 		engine.renderer.chunk_map.dispose();
-		engine.renderer.temp_chunk_map.dispose();
 		engine.voxel_allocator.reset();
 
 		init(
@@ -211,38 +209,47 @@ void update_engine(Engine & engine)
 			engine.draw_options.voxel_settings.voxels_in_chunk
 		);
 
-		// allocate_chunks(engine.renderer, engine.draw_options.voxel_settings.chunks_in_world, engine.renderer.temp_chunk_map);
-		// allocate_chunks(engine.renderer, chunks_in_map_2, engine.renderer.temp_chunk_map_2);
-
-		VoxelData * gpu_buffer_memory = reinterpret_cast<VoxelData*>(engine.renderer.gpu_buffer_memory);
-		init(
-			engine.renderer.temp_chunk_map,
-			gpu_buffer_memory,
-			engine.draw_options.voxel_settings.chunks_in_world,
-			engine.draw_options.voxel_settings.voxels_in_chunk
-		);
-
-		init(
-			engine.renderer.temp_chunk_map_2,
-			gpu_buffer_memory + total_chunk_count + total_voxel_count,
-			chunks_in_map_2,
-			engine.draw_options.voxel_settings.voxels_in_chunk
-		);
-
-		init(
-			engine.renderer.temp_chunk_map_3,
-			gpu_buffer_memory + total_chunk_count + total_voxel_count + elements_in_chunk_map_2,
-			chunks_in_map_2,
-			engine.draw_options.voxel_settings.voxels_in_chunk
-		);
-
-		generate_test_world_in_thread(
-			engine.renderer,
+		allocate_chunks(engine.renderer, engine.draw_options.voxel_settings.chunks_in_world, engine.renderer.island_1.map);
+		allocate_chunks(engine.renderer, engine.draw_options.voxel_settings.chunks_in_world, engine.renderer.island_2.map);
+		allocate_chunks(engine.renderer, chunks_in_map_2, engine.renderer.player_voxel_object.map);
+		allocate_chunks(engine.renderer, chunks_in_map_2, engine.renderer.npc_voxel_object.map);
+		
+		// generate_test_world_in_thread(
+		generate_test_world(
+			engine.renderer.island_1,
 			engine.debug_terrain,
 			engine.noise_settings,
 			engine.world_settings,
 			engine.draw_options.voxel_settings,
 			&engine.world_generation_progress
+		);
+
+		generate_test_world(
+			engine.renderer.island_2,
+			engine.debug_terrain,
+			engine.noise_settings,
+			engine.world_settings,
+			engine.draw_options.voxel_settings,
+			&engine.world_generation_progress
+		);
+		engine.renderer.island_2.position_VS = int3(50, 0, 0);
+
+
+		TIME_FUNCTION(
+			draw_cuboid(
+				engine.renderer,
+				engine.character.size,
+				engine.character.color,
+				engine.renderer.player_voxel_object
+			),
+			engine.timings.draw_character
+		);
+	
+		draw_cuboid(
+			engine.renderer,
+			engine.debug_character.size,
+			engine.debug_character.color,
+			engine.renderer.npc_voxel_object
 		);
 	}
 
@@ -390,19 +397,29 @@ void render_engine(Engine & engine)
 			TIME_FUNCTION(prepare_frame(engine.renderer, engine.temp_allocator), engine.timings.prepare_frame);
 
 			TIME_FUNCTION(
-				draw_cuboid(engine.renderer, engine.character.position, engine.character.size, engine.character.color, 1),
+				update_position(
+					engine.renderer,
+					engine.character.position,
+					engine.character.size,
+					engine.renderer.player_voxel_object
+				),
 				engine.timings.draw_character
 			);
 		
-			draw_cuboid(engine.renderer, engine.debug_character.position, engine.debug_character.size, engine.debug_character.color, 2);
+			update_position(
+				engine.renderer,
+				engine.debug_character.position,
+				engine.debug_character.size,
+				engine.renderer.npc_voxel_object
+			);		
 
-			TIMER_BEGIN(draw_mouses);
-			for (MouseState const & mouse : engine.mouses)
-			{
-				float3 color = engine.mouse_colors.evaluate(mouse.hash.get_float_A_01()).rgb;
-				draw_cuboid(engine.renderer, mouse.position, 0.125, color, 0);
-			}
-			TIMER_END(engine.timings, draw_mouses);
+			// TIMER_BEGIN(draw_mouses);
+			// for (MouseState const & mouse : engine.mouses)
+			// {
+			// 	float3 color = engine.mouse_colors.evaluate(mouse.hash.get_float_A_01()).rgb;
+			// 	draw_cuboid(engine.renderer, mouse.position, 0.125, color, 0);
+			// }
+			// TIMER_END(engine.timings, draw_mouses);
 
 			float3 world_size = float3(engine.world_settings.world_size);
 			TIME_FUNCTION(draw_grass(engine.grass, engine.renderer, world_size), engine.timings.draw_grass);
@@ -410,6 +427,9 @@ void render_engine(Engine & engine)
 
 	TIMER_END(engine.timings, draw_to_octree);
 
+		// Set island positions
+		engine.renderer.island_1.position_VS = engine.world_settings.island_1_position;
+		engine.renderer.island_2.position_VS = engine.world_settings.island_2_position;
 
 	TIMER_BEGIN(setup_draw_buffers);
 
@@ -433,13 +453,41 @@ void render_engine(Engine & engine)
 
 	TIMER_BEGIN(copy_to_graphics);
 
-	if(engine.paused == false)
-	{
-		// Todo(Leo): this is still problematic, since we are not synced with rendering, and this might be updated from cpu
-		// (voxel renderer) while being copied to actual gpu buffer. Now it could be fixed by setting virtual frame
-		// count to 1, but i am not sure if I want to do that yet. It might be okay though.	
-		graphics_buffer_apply(graphics, renderer.voxel_data_buffer_handle);
-	}
+		if (engine.events.recreate_world)
+		{
+			// Todo(Leo): this is still problematic, since we are not synced with rendering, and this might be updated from cpu
+			// (voxel renderer) while being copied to actual gpu buffer. Now it could be fixed by setting virtual frame
+			// count to 1, but i am not sure if I want to do that yet. It might be okay though.	
+
+			graphics_buffer_apply(
+				graphics,
+				renderer.voxel_data_buffer_handle,
+				renderer.player_voxel_object.map.data_start * sizeof(VoxelData),
+				renderer.player_voxel_object.map.nodes.memory_size()
+			);
+
+			graphics_buffer_apply(
+				graphics,
+				renderer.voxel_data_buffer_handle,
+				renderer.npc_voxel_object.map.data_start * sizeof(VoxelData),
+				renderer.npc_voxel_object.map.nodes.memory_size()
+			);
+
+			graphics_buffer_apply(
+				graphics,
+				renderer.voxel_data_buffer_handle,
+				renderer.island_1.map.data_start * sizeof(VoxelData),
+				renderer.island_1.map.nodes.memory_size()
+			);
+
+			graphics_buffer_apply(
+				graphics,
+				renderer.voxel_data_buffer_handle,
+				renderer.island_2.map.data_start * sizeof(VoxelData),
+				renderer.island_2.map.nodes.memory_size()
+			);
+
+		}
 
 		graphics_write_buffer(graphics, renderer.voxel_info_buffer_handle, sizeof voxel_world_info, &voxel_world_info);
 		graphics_write_buffer(graphics, renderer.per_frame_uniform_buffer_handle, sizeof per_frame_uniform_buffer, &per_frame_uniform_buffer);

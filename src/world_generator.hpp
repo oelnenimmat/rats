@@ -11,7 +11,7 @@
 #include <atomic>
 
 void generate_test_world(
-	VoxelRenderer & renderer, 
+	VoxelObject & target, 
 	DebugTerrain const & terrain,
 	NoiseSettings const & noise_settings,
 	WorldSettings const & world_settings,
@@ -108,7 +108,7 @@ void generate_test_world(
 				}
 				normal = normalize(normal);
 
-				VoxelData & node = get_node(renderer.chunk_map, x,y,z);
+				VoxelData & node = get_node(target.map, x,y,z);
 				node.material() = 1;
 
 				// world_position.y = y * VS_to_WS;
@@ -138,10 +138,11 @@ void generate_test_world(
 			}
 		}
 	}
+	*progress = 1;
 }
 
 void generate_test_world_in_thread(
-	VoxelRenderer & renderer, 
+	VoxelObject & target, 
 	DebugTerrain const & terrain,
 	NoiseSettings const & noise_settings,
 	WorldSettings const & world_settings,
@@ -152,7 +153,7 @@ void generate_test_world_in_thread(
 	*progress = 0;
 	auto thread = std::thread([&, progress]()
 	{
-		generate_test_world(renderer, terrain, noise_settings, world_settings, voxel_settings, progress);
+		generate_test_world(target, terrain, noise_settings, world_settings, voxel_settings, progress);
 		*progress = 1;
 	});
 	thread.detach();

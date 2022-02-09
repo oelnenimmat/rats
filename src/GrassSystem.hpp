@@ -222,6 +222,8 @@ namespace gui
 
 void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 world_size)
 {
+	/*
+
 	if (grass.roots.length() == 0)
 	{
 		return;
@@ -266,7 +268,7 @@ void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 worl
 			int z = floor(tz);
 
 			auto & node = get_node(
-				renderer.temp_chunk_map,
+				renderer.world_chunk_map,
 				x + start_VS.x,
 				y + start_VS.y,
 				z + start_VS.z
@@ -291,7 +293,7 @@ void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 worl
 			int z = floor(tz);
 
 			auto & node = get_node(
-				renderer.temp_chunk_map,
+				renderer.world_chunk_map,
 				x + start_VS.x,
 				y + start_VS.y,
 				z + start_VS.z
@@ -301,4 +303,5 @@ void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 worl
 			node.color = flower_color;
 		}
 	}
+	*/
 }

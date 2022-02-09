@@ -181,10 +181,15 @@ Window * create_window(Allocator * allocator)
 	char const * window_class_name = "Window class";
 	char const * window_name = "New Game";
 
-	int window_position_x = 100;
-	int window_position_y = 100;
-	window->width = 960;
-	window->height = 540;
+	// int window_position_x = 100;
+	// int window_position_y = 100;
+	// window->width = 960;
+	// window->height = 540;
+
+	int window_position_x = 0;
+	int window_position_y = 0;
+	window->width = 1920;
+	window->height = 1080;
 
 	WNDCLASSEX classInfo = {};
 	classInfo.cbSize = sizeof(WNDCLASSEX);

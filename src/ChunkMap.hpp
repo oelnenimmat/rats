@@ -11,7 +11,11 @@ struct ChunkMap
 	Array<T> memory;
 	Slice<T> nodes;
 
-	T garbage_value = {};
+	// this is for voxel renderer
+	size_t data_start;
+	// int3 offset_in_voxels; // voxel space
+	int3 size_in_chunks; // chunk space
+
 
 	void dispose()
 	{
@@ -47,6 +51,7 @@ void init (ChunkMap<T> & map, T * memory, int3 chunk_count, int voxel_count_in_c
 	map.nodes = make_slice<T>(total_element_count, memory);
 }
 
+template<typename T> T garbage_value = {};
 
 template<typename T>
 T & get_node(ChunkMap<T> & map, int x, int y, int z)
@@ -58,7 +63,8 @@ T & get_node(ChunkMap<T> & map, int x, int y, int z)
 	// int max_dimension = map.chunk_count * map.voxel_count_in_chunk;
 	if (x < 0 || x >= max_x || y < 0 || y >= max_y || z < 0  || z >= max_z)
 	{
-		return map.garbage_value;
+		// static T garbage_value;
+		return garbage_value<T>;
 	}	
 
 

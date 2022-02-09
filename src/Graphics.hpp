@@ -50,7 +50,7 @@ int graphics_create_buffer(Graphics*, size_t size, GraphicsBufferType type);
 void graphics_destroy_buffer(Graphics*, int buffer_handle);
 bool graphics_bind_buffer(Graphics*, int buffer_handle, int index_in_shader, GraphicsBufferType type);
 void * graphics_buffer_get_writeable_memory(Graphics*, int buffer_handle);
-void graphics_buffer_apply(Graphics*, int buffer_handle);
+void graphics_buffer_apply(Graphics*, int buffer_handle, size_t data_start, size_t data_length);
 void graphics_write_buffer(Graphics*, int buffer_handle, size_t size, void * data);
 
 [[nodiscard]] bool graphics_create_compute_pipeline(Graphics*, GraphicsPipelineLayout*);

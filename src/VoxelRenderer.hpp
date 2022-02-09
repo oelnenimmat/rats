@@ -37,8 +37,8 @@ struct VoxelData
 struct VoxelMapRange
 {
 	int4 data_start;
-	int4 world_offset;
-	int4 world_size;
+	int4 offset_in_voxels;
+	int4 size_in_chunks;
 };
 
 // Packed datastructure for compute shader
@@ -62,14 +62,28 @@ enum GraphicsPerFrameBufferNames : int
 	per_frame_buffer_count
 };
 
+struct VoxelObject
+{
+	ChunkMap<VoxelData> map;
+	int3 				position_VS;
+};
+
 struct VoxelRenderer
 {
 	// todo: no need to have this as template rn, maybe
 	ChunkMap<VoxelData> chunk_map;
-	ChunkMap<VoxelData> temp_chunk_map;
 
-	ChunkMap<VoxelData> temp_chunk_map_2;
-	ChunkMap<VoxelData> temp_chunk_map_3;
+	// ChunkMap<VoxelData> island_1_chunk_map;
+	// ChunkMap<VoxelData> island_2_chunk_map;
+
+	// ChunkMap<VoxelData> player_chunk_map;
+	// ChunkMap<VoxelData> npc_chunk_map;
+
+	VoxelObject island_1;
+	VoxelObject island_2;
+
+	VoxelObject player_voxel_object;
+	VoxelObject npc_voxel_object;
 
 	Graphics * graphics;
 	DrawOptions * draw_options;
@@ -77,15 +91,9 @@ struct VoxelRenderer
 	// Seems suspiciously like an arena allocator
 	// Also seems suspiciosly like overengineered overhead over vulkan stuff
 	// todo: make use graphics "internals" i.e. vulkan graphics directly
-	size_t gpu_buffer_capacity;
-	size_t gpu_buffer_used;
-	byte * gpu_buffer_memory;
-
-	int3 debug_chunk_start;
-	int3 debug_chunk_size;
-
-	int3 debug_chunk_start_2;
-	int3 debug_chunk_size_2;
+	size_t voxel_buffer_capacity;
+	size_t voxel_buffer_used;
+	VoxelData * voxel_buffer_memory; // "owned", as in loaned from graphics
 
 	int voxel_data_buffer_handle;
 	int voxel_info_buffer_handle;
@@ -103,31 +111,54 @@ struct VoxelRenderer
 		);
 		voxel_world_info.voxels_in_chunk_map_count = int4(
 			draw_options->voxel_settings.voxels_in_chunk,
-			3,
+			4,
 			0,
 			0
 		);
 
-		voxel_world_info.ranges[0].data_start 	= int4(0,0,0,0);
-		voxel_world_info.ranges[0].world_offset = int4(0,0,0,0);
-		voxel_world_info.ranges[0].world_size 	= int4(draw_options->voxel_settings.chunks_in_world, 0);
+		voxel_world_info.ranges[0].data_start 		= int4(island_1.map.data_start, 0, 0, 0);
+		voxel_world_info.ranges[0].offset_in_voxels = int4(island_1.position_VS,0);
+		voxel_world_info.ranges[0].size_in_chunks 	= int4(island_1.map.size_in_chunks, 0);
 
-		voxel_world_info.ranges[1].data_start 	= int4(temp_chunk_map.nodes.length(), 0, 0, 0);		
-		voxel_world_info.ranges[1].world_offset = int4(debug_chunk_start, 0);
-		voxel_world_info.ranges[1].world_size 	= int4(2,3,2, 0);		
+		voxel_world_info.ranges[1].data_start 		= int4(island_2.map.data_start, 0, 0, 0);
+		voxel_world_info.ranges[1].offset_in_voxels = int4(island_2.position_VS,0);
+		voxel_world_info.ranges[1].size_in_chunks 	= int4(island_2.map.size_in_chunks, 0);
 
-		voxel_world_info.ranges[2].data_start 	= int4(temp_chunk_map.nodes.length() + temp_chunk_map_2.nodes.length(), 0, 0, 0);		
-		voxel_world_info.ranges[2].world_offset = int4(debug_chunk_start_2, 0);
-		voxel_world_info.ranges[2].world_size 	= int4(2,3,2, 0);		
+		voxel_world_info.ranges[2].data_start 		= int4(player_voxel_object.map.data_start, 0, 0, 0);
+		voxel_world_info.ranges[2].offset_in_voxels = int4(player_voxel_object.position_VS, 0);
+		voxel_world_info.ranges[2].size_in_chunks 	= int4(player_voxel_object.map.size_in_chunks, 0);		
+
+		voxel_world_info.ranges[3].data_start 		= int4(npc_voxel_object.map.data_start, 0, 0, 0);
+		voxel_world_info.ranges[3].offset_in_voxels = int4(npc_voxel_object.position_VS, 0);
+		voxel_world_info.ranges[3].size_in_chunks 	= int4(npc_voxel_object.map.size_in_chunks, 0);		
 
 		return voxel_world_info;
 	}
 };
 
-// void allocate_chunks(VoxelRenderer & renderer, int3 chunks, ChunkMap<VoxelData> & out_chunk_map)
-// {
-// 	VoxelData
-// }
+void allocate_chunks(VoxelRenderer & renderer, int3 chunks, ChunkMap<VoxelData> & out_chunk_map)
+{
+	int chunk_count 	= chunks.x * chunks.y * chunks.z;
+	int voxel_count 	= chunk_count * pow3(renderer.draw_options->voxel_settings.voxels_in_chunk);
+	int element_count 	= chunk_count + voxel_count;
+
+	MINIMA_ASSERT((renderer.voxel_buffer_used + element_count) < renderer.voxel_buffer_capacity);
+
+	size_t data_start = renderer.voxel_buffer_used;
+
+	VoxelData * memory = renderer.voxel_buffer_memory + renderer.voxel_buffer_used;
+	renderer.voxel_buffer_used += element_count;
+
+	out_chunk_map.dispose();
+	out_chunk_map = {};
+
+	out_chunk_map.chunk_count = chunks;
+	out_chunk_map.size_in_chunks = chunks;
+	out_chunk_map.voxel_count_in_chunk = renderer.draw_options->voxel_settings.voxels_in_chunk;
+
+	out_chunk_map.data_start = data_start;
+	out_chunk_map.nodes = make_slice<VoxelData>(element_count, memory);
+}
 
 void init(VoxelRenderer & renderer, DrawOptions * draw_options, Graphics * graphics)
 {
@@ -165,24 +196,72 @@ void init(VoxelRenderer & renderer, DrawOptions * draw_options, Graphics * graph
 	graphics_bind_buffer(graphics, renderer.voxel_info_buffer_handle, voxel_info_buffer, GraphicsBufferType::uniform);
 	graphics_bind_buffer(graphics, renderer.per_frame_uniform_buffer_handle, camera_buffer, GraphicsBufferType::uniform);
 
-	renderer.gpu_buffer_capacity = mebibytes(100);
-	renderer.voxel_data_buffer_handle = graphics_create_buffer(graphics, renderer.gpu_buffer_capacity, GraphicsBufferType::storage);
+	renderer.voxel_buffer_capacity = 256 * 256 * 256;
+	renderer.voxel_data_buffer_handle = graphics_create_buffer(
+		graphics, 
+		renderer.voxel_buffer_capacity * sizeof(VoxelData),
+		GraphicsBufferType::storage
+	);
 	graphics_bind_buffer(graphics, renderer.voxel_data_buffer_handle, voxel_data_buffer, GraphicsBufferType::storage);
 
-	renderer.gpu_buffer_memory = reinterpret_cast<byte*>(graphics_buffer_get_writeable_memory(graphics, renderer.voxel_data_buffer_handle));
+	renderer.voxel_buffer_used = 0;
+	renderer.voxel_buffer_memory = reinterpret_cast<VoxelData*>(graphics_buffer_get_writeable_memory(graphics, renderer.voxel_data_buffer_handle));
 }
 
-
+void reset_allocations(VoxelRenderer & renderer)
+{
+	renderer.voxel_buffer_used = 0;
+	memset(renderer.voxel_buffer_memory, 0, renderer.voxel_buffer_capacity * sizeof(VoxelData));
+}
 
 // Call prepare_frame always once per frame before drawing dynamic objects
 void prepare_frame(VoxelRenderer & renderer, Allocator & temp_allocator)
 {
-	copy_slice_data(renderer.temp_chunk_map.nodes, renderer.chunk_map.nodes);
-	clear_slice_data(renderer.temp_chunk_map_2.nodes);
-	clear_slice_data(renderer.temp_chunk_map_3.nodes);
+	// copy_slice_data(renderer.island_1_chunk_map.nodes, renderer.chunk_map.nodes);
+	// clear_slice_data(renderer.player_chunk_map.nodes);
+	// clear_slice_data(renderer.npc_chunk_map.nodes);
 }
 
-void draw_cuboid(VoxelRenderer & renderer, float3 position_WS, float size, float3 color, int map_index)
+void draw_cuboid(
+	VoxelRenderer const & renderer,
+	float size,
+	float3 color,
+	VoxelObject & target
+)
+{	
+	float WS_to_VS = renderer.draw_options->voxel_settings.WS_to_VS();
+
+	float3 size_WS 		= float3(size, 2 * size, size);
+	int3 size_VS 		= max(int3(size_WS * WS_to_VS), 1); // Always draw at least one voxel, for now at least, for debug
+
+	for (int z = 0; z < size_VS.z; z++)
+	for (int y = 0; y < size_VS.y; y++)
+	for (int x = 0; x < size_VS.x; x++)
+	{
+		VoxelData & node = get_node(target.map, x,y,z);
+		node.material() = 1;
+
+		node.color = float4(color, 1);
+
+		float3 normal = float3(0,0,0);
+		if (x == 0)				{ normal.x -= 1; }
+		if (x == size_VS.x - 1)	{ normal.x += 1; }
+
+		if (y == 0)				{ normal.y -= 1; }
+		if (y == size_VS.y - 1)	{ normal.y += 1; }
+		
+		if (z == 0)				{ normal.z -= 1; }
+		if (z == size_VS.z - 1)	{ normal.z += 1; }
+		node.normal() = normalize(normal);
+	}
+}
+
+void update_position(
+	VoxelRenderer const & renderer,
+	float3 position_WS,
+	float size,
+	VoxelObject & target
+)
 {	
 	float WS_to_VS = renderer.draw_options->voxel_settings.WS_to_VS();
 
@@ -193,62 +272,5 @@ void draw_cuboid(VoxelRenderer & renderer, float3 position_WS, float size, float
 	float3 start_WS 	= position_WS + offset_OS;
 	int3 start_VS 		= int3(floor(start_WS * WS_to_VS));
 
-	if(map_index == 1)
-	{
-		float VS_to_CS = renderer.draw_options->voxel_settings.VS_to_CS();
-		int3 start_CS = int3(floor(float3(start_VS) * VS_to_CS));
-		int3 size_CS = int3(floor(float3(size_VS) * VS_to_CS));
-
-		renderer.debug_chunk_start = start_CS;
-		renderer.debug_chunk_size = size_CS;
-
-		start_VS -= start_CS * renderer.draw_options->voxel_settings.voxels_in_chunk;
-	}
-	else if(map_index == 2)
-	{
-		float VS_to_CS = renderer.draw_options->voxel_settings.VS_to_CS();
-		int3 start_CS = int3(floor(float3(start_VS) * VS_to_CS));
-		int3 size_CS = int3(floor(float3(size_VS) * VS_to_CS));
-
-		renderer.debug_chunk_start_2 = start_CS;
-		renderer.debug_chunk_size_2 = size_CS;
-
-		start_VS -= start_CS * renderer.draw_options->voxel_settings.voxels_in_chunk;
-	}
-
-
-	// ChunkMap<VoxelData> & target = draw_to_alt_map ? renderer.temp_chunk_map_2 : renderer.temp_chunk_map;
-	// ChunkMap<VoxelData> & target = [&]() -> ChunkMap<VoxelData> &
-	// {
-	// 	if (map_index == 1) return renderer.temp_chunk_map_2;
-	// 	if (map_index == 2) return renderer.temp_chunk_map_3;
-
-	// 	return renderer.temp_chunk_map;
-	// }();
-
-	ChunkMap<VoxelData> * target = &renderer.temp_chunk_map;
-	if (map_index == 1) { target = &renderer.temp_chunk_map_2; }
-	if (map_index == 2) { target = &renderer.temp_chunk_map_3; }
-
-	for_xyz(size_VS, [&](int x, int y, int z)
-	{
-		float3 position_OS = float3(x,y,z) - offset_OS;
-
-		// WS and OS are same size, they are just located different places
-		// if (length(position_OS.xz) < size / 2)
-		{
-			x += start_VS.x;
-			y += start_VS.y;
-			z += start_VS.z;
-
-			VoxelData & node = get_node(*target, x,y,z);
-			node.material() = 1;
-
-			float3 normal = position_OS;
-			// normal.y *= 0.5;
-			normal = normalize(normal);
-			node.normal() = normal;
-			node.color = float4(color, 1);
-		}
-	});
+	target.position_VS = start_VS;
 }

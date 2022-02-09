@@ -136,8 +136,8 @@ Ray get_camera_ray()
 bool draw_bounds_2(Ray ray, int map_index)
 {
 	// This is wasteful way of doing this. Either do separate compute shader, or actual grpahics pipeline with lines
-	vec3 chunk_range_bounds_min = voxel_world_info.ranges[map_index].offset.xyz * get_CS_to_WS();
-	vec3 chunk_range_bounds_max = (voxel_world_info.ranges[map_index].offset.xyz + voxel_world_info.ranges[map_index].size.xyz) * get_CS_to_WS();
+	vec3 chunk_range_bounds_min = voxel_world_info.ranges[map_index].offset_in_voxels.xyz * get_VS_to_WS();
+	vec3 chunk_range_bounds_max = chunk_range_bounds_min + voxel_world_info.ranges[map_index].size_in_chunks.xyz * get_CS_to_WS();
 	return draw_bounds(ray, chunk_range_bounds_min, chunk_range_bounds_max);
 }
 

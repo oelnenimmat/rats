@@ -2,5 +2,5 @@
 
 void run_experiments()
 {
-	array_2_test();
+	// array_2_test();
 }

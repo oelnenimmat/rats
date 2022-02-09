@@ -20,7 +20,7 @@ https://arm-software.github.io/vulkan_best_practice_for_mobile_developers/sample
 #include "../vectors.hpp"
 
 // Todo(Leo) this is only that we don't have to deal with order of definitions right now
-#define USE_SOMETHING_ELSE_VIRTUAL_FRAME_COUNT 2
+#define USE_SOMETHING_ELSE_VIRTUAL_FRAME_COUNT 3
 
 struct ComputeBuffer
 {
@@ -30,11 +30,8 @@ struct ComputeBuffer
 	VkDeviceMemory memory;
 	VkBuffer buffer;
 
-	bool use_staging_buffer;
-	bool needs_to_apply = false;
-	size_t apply_size;
-	size_t apply_offset;
 
+	bool use_staging_buffer;
 	VkDeviceMemory staging_memory;
 	VkBuffer staging_buffer;
 	void * mapped_staging_memory;
@@ -409,24 +406,24 @@ void graphics_draw_frame(Graphics * context)
 
 
 	// auto apply_cmd = begin_single_use_command_buffer(context);
-	context->per_frame_buffer_pool.for_each([cmd](ComputeBuffer & buffer)
-	{
+	// context->per_frame_buffer_pool.for_each([cmd](ComputeBuffer & buffer)
+	// {
 
-		if(buffer.created && buffer.needs_to_apply)
-		{
-			VkBufferCopy copy =
-			{
-				0,
-				buffer.apply_offset,
-				buffer.apply_size
-			};
-			vkCmdCopyBuffer(cmd, buffer.staging_buffer, buffer.buffer, 1, &copy);
+	// 	if(buffer.created && buffer.needs_to_apply)
+	// 	{
+	// 		VkBufferCopy copy =
+	// 		{
+	// 			0,
+	// 			buffer.apply_offset,
+	// 			buffer.apply_size
+	// 		};
+	// 		vkCmdCopyBuffer(cmd, buffer.staging_buffer, buffer.buffer, 1, &copy);
 
-			buffer.needs_to_apply = false;
-			buffer.apply_offset = 0;
-			buffer.apply_size = 0;
-		}
-	});
+	// 		buffer.needs_to_apply = false;
+	// 		buffer.apply_offset = 0;
+	// 		buffer.apply_size = 0;
+	// 	}
+	// });
 	// execute_single_use_command_buffer(context, apply_cmd);
 
 	
@@ -656,12 +653,14 @@ void graphics_write_buffer(Graphics * context, int buffer_handle, size_t size, v
 	ComputeBuffer & buffer = context->per_frame_buffer_pool[buffer_handle];
 	if (buffer.use_staging_buffer)
 	{
-		void * dst = buffer.mapped_staging_memory;
-		memcpy(dst, data, size);
+		MINIMA_ASSERT(false && "staging buffered buffers should use graphics_buffer_get_writeable_memory and graphics_buffer_apply");
 
-		buffer.needs_to_apply = true;
-		buffer.apply_size = size;
-		buffer.apply_offset = buffer.single_buffer_memory_size * context->current_frame_index;
+		// void * dst = buffer.mapped_staging_memory;
+		// memcpy(dst, data, size);
+
+		// buffer.needs_to_apply = true;
+		// buffer.apply_size = size;
+		// buffer.apply_offset = buffer.single_buffer_memory_size * context->current_frame_index;
 	}
 	else
 	{
@@ -800,10 +799,30 @@ void * graphics_buffer_get_writeable_memory(Graphics * context, int buffer_handl
 	}
 }
 
-void graphics_buffer_apply(Graphics * context, int buffer_handle)
+void graphics_buffer_apply(Graphics * context, int buffer_handle, size_t data_start, size_t data_length)
 {
+	// ComputeBuffer & buffer = context->per_frame_buffer_pool[buffer_handle];
+	// buffer.needs_to_apply = true;
+	// buffer.apply_offset = 0;
+	// buffer.apply_size = buffer.single_buffer_memory_size;
+
 	ComputeBuffer & buffer = context->per_frame_buffer_pool[buffer_handle];
-	buffer.needs_to_apply = true;
-	buffer.apply_offset = 0;
-	buffer.apply_size = buffer.single_buffer_memory_size;
+	// buffer.needs_to_apply = true;
+	// buffer.apply_offset = 0;
+	// buffer.apply_size = buffer.single_buffer_memory_size;
+
+	int frame_index = context->current_frame_index;
+	auto cmd = get_current_frame(context).command_buffer;
+
+	VkBufferCopy copy =
+	{
+		data_start, // staging buffer
+		data_start + (frame_index * buffer.single_buffer_memory_size), // actual buffer, offset to current frame's allocated portion
+		data_length,
+	};
+	vkCmdCopyBuffer(cmd, buffer.staging_buffer, buffer.buffer, 1, &copy);
+
+	// buffer.needs_to_apply = false;
+	// buffer.apply_offset = 0;
+	// buffer.apply_size = 0;
 }

@@ -42,8 +42,8 @@ layout(std430, set = PER_FRAME_SET, binding = PER_FRAME_VOXEL_DATA) readonly buf
 struct VoxelMapRange
 {
 	ivec4 data_start;
-	ivec4 offset;
-	ivec4 size;
+	ivec4 offset_in_voxels;
+	ivec4 size_in_chunks;
 };
 
 const int max_voxel_map_ranges = 20;
@@ -79,7 +79,7 @@ float get_CS_to_WS()
 
 ivec3 get_chunks_in_range(int index)
 {
-	return voxel_world_info.ranges[index].size.xyz;
+	return voxel_world_info.ranges[index].size_in_chunks.xyz;
 }
 
 int get_voxels_in_chunk()
@@ -97,26 +97,37 @@ int get_range_data_start(int index)
 	return voxel_world_info.ranges[index].data_start.x;
 }
 
+ivec3 transform_voxel_to_local_voxel_space(ivec3 voxel_in_global_voxel_space, int index)
+{
+	ivec3 voxel_in_local_voxel_space = voxel_in_global_voxel_space - voxel_world_info.ranges[index].offset_in_voxels.xyz;
+	return voxel_in_local_voxel_space;
+}
+
 ivec3 get_chunk(ivec3 voxel_in_global_voxel_space, int index)
 {
-	ivec3 chunk_in_global_chunk_space = voxel_in_global_voxel_space / get_voxels_in_chunk();
-	return chunk_in_global_chunk_space - voxel_world_info.ranges[index].offset.xyz;
+	ivec3 voxel_in_local_voxel_space = transform_voxel_to_local_voxel_space(voxel_in_global_voxel_space, index);
+	ivec3 chunk_in_local_chunk_space = voxel_in_local_voxel_space / get_voxels_in_chunk();
+	return chunk_in_local_chunk_space;
+
+	// ivec3 chunk_in_global_chunk_space = voxel_in_global_voxel_space / get_voxels_in_chunk();
+	// return chunk_in_global_chunk_space - voxel_world_info.ranges[index].offset_in_chunks.xyz;
 }
 
-ivec3 get_chunk_range_min(int index)
+
+ivec3 get_voxel_range_min(int map_index)
 {
-	return voxel_world_info.ranges[index].offset.xyz;
+	return voxel_world_info.ranges[map_index].offset_in_voxels.xyz;// * get_voxels_in_chunk();
 }
 
-ivec3 get_chunk_range_max(int index)
+ivec3 get_voxel_range_max(int map_index)
 {
-	return voxel_world_info.ranges[index].offset.xyz + voxel_world_info.ranges[index].size.xyz;
+	return voxel_world_info.ranges[map_index].offset_in_voxels.xyz + (voxel_world_info.ranges[map_index].size_in_chunks.xyz) * get_voxels_in_chunk();
 }
 
-ivec3 get_chunk_range_size(int index)
-{
-	return voxel_world_info.ranges[index].size.xyz;
-}
+// ivec3 get_chunk_range_size(int index)
+// {
+// 	return voxel_world_info.ranges[index].size_in_chunks.xyz;
+// }
 
 // todo: function calls from these could be removed, but it gets messier if those are later changed
 int get_chunk_index(const ivec3 chunk, int range_index)

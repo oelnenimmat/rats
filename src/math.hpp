@@ -63,3 +63,9 @@ namespace rats
 
 
 }
+
+template <typename T>
+inline T pow3(T value)
+{
+	return value * value * value;
+}
