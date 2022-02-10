@@ -30,6 +30,62 @@ union int4;
 
 // ----------------------------------------------------------------------------
 
+struct bool3
+{
+	bool x, y, z;
+
+	bool3() : x(false), y(false), z(false) {}
+	bool3(bool x, bool y, bool z) : x(x), y(y), z(z) {}
+};
+
+inline bool3 less_than (float3 const & lhs, float3 const & rhs)
+{
+	return bool3(
+		lhs.x < rhs.x,
+		lhs.y < rhs.y,
+		lhs.z < rhs.z
+	);
+}
+
+inline bool3 less_than_or_equal (float3 const & lhs, float3 const & rhs)
+{
+	return bool3(
+		lhs.x <= rhs.x,
+		lhs.y <= rhs.y,
+		lhs.z <= rhs.z
+	);
+}
+
+inline bool3 greater_than (float3 const & lhs, float3 const & rhs)
+{
+	return bool3(
+		lhs.x > rhs.x,
+		lhs.y > rhs.y,
+		lhs.z > rhs.z
+	);
+}
+
+inline bool3 greater_than_or_equal (float3 const & lhs, float3 const & rhs)
+{
+	return bool3(
+		lhs.x >= rhs.x,
+		lhs.y >= rhs.y,
+		lhs.z >= rhs.z
+	);
+}
+
+inline bool any(bool3 b)
+{
+	return b.x || b.y || b.z;
+}
+
+inline bool all(bool3 b)
+{
+	return b.x && b.y && b.z;
+}
+
+// ----------------------------------------------------------------------------
+
 inline SERIALIZE_STRUCT(float2 const & v)
 {
 	serializer.write("x", v.x);

@@ -92,7 +92,7 @@ int get_voxel_map_count()
 	return voxel_world_info.voxels_in_chunk_map_count.y;
 }
 
-int get_range_data_start(int index)
+int get_chunk_data_start(int index)
 {
 	return voxel_world_info.ranges[index].data_start.x;
 }
@@ -142,7 +142,7 @@ int get_voxel_index(const ivec3 voxel)
 
 int get_voxel_data_start(int range_index)
 {
-	return get_chunks_in_range(range_index).x * get_chunks_in_range(range_index).y * get_chunks_in_range(range_index).z;
+	return get_chunk_data_start(range_index) + get_chunks_in_range(range_index).x * get_chunks_in_range(range_index).y * get_chunks_in_range(range_index).z;
 }
 
 // ----------------------------------------------------------------------------

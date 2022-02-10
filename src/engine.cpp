@@ -23,10 +23,11 @@
 #include "Noise.hpp"
 #include "Character.hpp"
 #include "GrassSystem.hpp"
-#include "WorldSettings.hpp"
+#include "World.hpp"
 #include "Mouse.hpp"
 
 #include "world_generator.hpp"
+#include "collisions.hpp"
 
 
 static void initialize_engine(Engine&, Graphics*, Window*, Input*);
@@ -118,7 +119,7 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 	MINIMA_ASSERT(window != nullptr);
 	MINIMA_ASSERT(graphics != nullptr);
 	MINIMA_ASSERT(input != nullptr);
-	
+
 	/*
 	Todo: maybe do like this
 		window = platform_create_window()
@@ -166,10 +167,10 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 	init(engine.renderer, &engine.draw_options, graphics);
 
 	// Game systems?
-	// init(world); // like load game stuff?
- 
+
 	engine.debug_terrain.init(engine.debug_terrain_settings);
 	init(engine.grass, &engine.grass_settings, &global_debug_allocator, &engine.debug_terrain);
+ 	init(engine.world, &engine.world_settings, &engine.debug_terrain);
 
 	// todo: make mouse system, and init it
 	for (int i = 0; i < array_length(engine.mouses); i++)
@@ -195,11 +196,11 @@ void update_engine(Engine & engine)
 		int3 chunks_in_character 	= int3(1,2,1);
 		int3 chunks_for_grass 		= int3(4,4,4);
 
-		// todo: dont do this, we only want to recreate world, not the renderer
 		engine.renderer.island_1.map.dispose();
 		engine.renderer.island_2.map.dispose();
 		engine.renderer.player_voxel_object.map.dispose();
 		engine.renderer.npc_voxel_object.map.dispose();
+		engine.renderer.grass_voxel_object.map.dispose();
 		reset_allocations(engine.renderer);
 		
 		engine.renderer.chunk_map.dispose();
@@ -212,13 +213,6 @@ void update_engine(Engine & engine)
 			engine.draw_options.voxel_settings.voxels_in_chunk
 		);
 
-		allocate_chunks(engine.renderer, engine.draw_options.voxel_settings.chunks_in_world, engine.renderer.island_1);
-		allocate_chunks(engine.renderer, engine.draw_options.voxel_settings.chunks_in_world, engine.renderer.island_2);
-		allocate_chunks(engine.renderer, chunks_in_character, engine.renderer.player_voxel_object);
-		allocate_chunks(engine.renderer, chunks_in_character, engine.renderer.npc_voxel_object);
-		// allocate_chunks(engine.renderer, chunks_in_character, engine.renderer.grass_voxel_object);
-		allocate_chunks(engine.renderer, chunks_for_grass, engine.renderer.grass_voxel_object);
-
 		// generate_test_world_in_thread(
 		generate_test_world(
 			engine.renderer.island_1,
@@ -226,6 +220,8 @@ void update_engine(Engine & engine)
 			engine.noise_settings,
 			engine.world_settings,
 			engine.draw_options.voxel_settings,
+			0,
+			engine.renderer,
 			&engine.world_generation_progress
 		);
 
@@ -235,10 +231,12 @@ void update_engine(Engine & engine)
 			engine.noise_settings,
 			engine.world_settings,
 			engine.draw_options.voxel_settings,
+			1,
+			engine.renderer,
 			&engine.world_generation_progress
 		);
-		engine.renderer.island_2.position_VS = int3(50, 0, 0);
 
+		allocate_chunks(engine.renderer, chunks_in_character, engine.renderer.player_voxel_object);
 		TIME_FUNCTION(
 			draw_cuboid(
 				engine.renderer,
@@ -249,12 +247,16 @@ void update_engine(Engine & engine)
 			engine.timings.draw_character
 		);
 	
+		allocate_chunks(engine.renderer, chunks_in_character, engine.renderer.npc_voxel_object);
 		draw_cuboid(
 			engine.renderer,
 			engine.debug_character.size,
 			engine.debug_character.color,
 			engine.renderer.npc_voxel_object
 		);
+
+		/// this needs to be allocated also, even though we don't write any data yet
+		allocate_chunks(engine.renderer, chunks_for_grass, engine.renderer.grass_voxel_object);
 	}
 
 	// ---------------------------------------------------------------------
@@ -288,9 +290,9 @@ void update_engine(Engine & engine)
 		bool ok = graphics_create_compute_pipeline(graphics, &layout);
 		MINIMA_ASSERT(ok);
 
-		graphics_bind_buffer(graphics, engine.renderer.voxel_data_buffer_handle, voxel_data_buffer, GraphicsBufferType::storage);
-		graphics_bind_buffer(graphics, engine.renderer.voxel_info_buffer_handle, voxel_info_buffer, GraphicsBufferType::uniform);
-		graphics_bind_buffer(graphics, engine.renderer.per_frame_uniform_buffer_handle, camera_buffer, GraphicsBufferType::uniform);
+		graphics_bind_buffer(graphics, engine.renderer.voxel_data_buffer_handle, voxel_data_buffer);
+		graphics_bind_buffer(graphics, engine.renderer.voxel_info_buffer_handle, voxel_info_buffer);
+		graphics_bind_buffer(graphics, engine.renderer.per_frame_uniform_buffer_handle, camera_buffer);
 
 		std::cout << "[ENGINE]: Recreated compute pipeline\n";
 	}
@@ -311,15 +313,7 @@ void update_engine(Engine & engine)
 	}
 	else
 	{
-		float3 game_camera_target_position = clamp(
-			engine.character.grounded_position, 
-			float3(2,0,2), 
-			float3(
-				engine.world_settings.world_size - 2,
-				engine.world_settings.world_size - 2,
-				engine.world_settings.world_size - 2
-			)
-		);
+		float3 game_camera_target_position = engine.character.position;
 
 		update_game_camera(
 			engine.game_camera_controller,
@@ -348,7 +342,8 @@ void update_engine(Engine & engine)
 		.characters 	= make_slice(character_count, characters),
 		.inputs 		= make_slice(character_count, inputs),
 
-		.terrain 		= &engine.debug_terrain,
+		// .terrain 		= &engine.debug_terrain,
+		.world 			= &engine.world,
 		.min_position 	= float3(0.5, 0.5, 0.5),
 		.max_position 	= float3(
 			engine.world_settings.world_size - 0.5f,
@@ -386,6 +381,17 @@ void update_engine(Engine & engine)
 	// These need to be stored back, since we use them as values here, not pointers
 	engine.character = characters[0];
 	engine.debug_character = characters[1];
+
+	// ------------------------------------------------------------------------
+
+	float3 character_bounds_min = engine.character.position + float3(-0.5, 0, -0.5) * engine.character.size;
+	float3 character_bounds_max = engine.character.position + float3(0.5, 2, 0.5) * engine.character.size;
+
+	float3 island_1_min = engine.world_settings.island_1_position;
+	float3 island_1_max = engine.world_settings.island_1_position + engine.world_settings.island_1_size;
+
+	engine.debug.collision = test_AABB_against_AABB(character_bounds_min, character_bounds_max, island_1_min, island_1_max);
+
 }
 
 void render_engine(Engine & engine)
@@ -417,7 +423,6 @@ void render_engine(Engine & engine)
 				engine.renderer.npc_voxel_object
 			);		
 
-
 			update_position(
 				engine.renderer,
 				engine.grass.settings->chunk_world_position,
@@ -444,13 +449,23 @@ void render_engine(Engine & engine)
 
 	TIMER_END(engine.timings, draw_to_octree);
 
-		// Set island positions
+		// Set island positions, no need to set these every frame really, but for editor reasons, we do
 		engine.renderer.island_1.position_VS = int3(floor(
 			engine.world_settings.island_1_position * engine.draw_options.voxel_settings.WS_to_VS()
 		));
 		engine.renderer.island_2.position_VS = int3(floor(
 			engine.world_settings.island_2_position * engine.draw_options.voxel_settings.WS_to_VS()
 		));
+
+		draw_wire_cube(engine.renderer, float3(0,0,0), float3(2,2,2));
+
+		float3 character_bounds_min = engine.character.position + float3(-0.5, 0, -0.5) * engine.character.size;
+		float3 character_bounds_max = engine.character.position + float3(0.5, 2, 0.5) * engine.character.size;
+
+		draw_wire_cube(engine.renderer, character_bounds_min, character_bounds_max);
+
+		draw_wire_cube(engine.renderer, engine.world_settings.island_1_position, engine.world_settings.island_1_position + engine.world_settings.island_1_size);
+		draw_wire_cube(engine.renderer, engine.world_settings.island_2_position, engine.world_settings.island_2_position + engine.world_settings.island_2_size);
 
 	TIMER_BEGIN(setup_draw_buffers);
 
@@ -466,6 +481,8 @@ void render_engine(Engine & engine)
 		);
 		per_frame_uniform_buffer.draw_options = engine.draw_options.get_gpu_data();
 		per_frame_uniform_buffer.lighting = engine.light_settings.get_light_data();
+		per_frame_uniform_buffer.draw_wire_cube_data = engine.renderer.draw_wire_cube_data;
+
 
 	TIMER_END(engine.timings, setup_draw_buffers);
 
@@ -480,42 +497,47 @@ void render_engine(Engine & engine)
 		// also, for some reason these work even if we are supposed to write to first virtual frame's buffer only.
 		if (engine.events.recreate_world)
 		{
-
 			graphics_buffer_apply(
 				graphics,
 				renderer.voxel_data_buffer_handle,
 				renderer.player_voxel_object.map.data_start * sizeof(VoxelData),
-				renderer.player_voxel_object.map.nodes.memory_size()
+				renderer.player_voxel_object.map.nodes.memory_size(),
+				false
 			);
 
 			graphics_buffer_apply(
 				graphics,
 				renderer.voxel_data_buffer_handle,
 				renderer.npc_voxel_object.map.data_start * sizeof(VoxelData),
-				renderer.npc_voxel_object.map.nodes.memory_size()
+				renderer.npc_voxel_object.map.nodes.memory_size(),
+				false
 			);
 
 			graphics_buffer_apply(
 				graphics,
 				renderer.voxel_data_buffer_handle,
 				renderer.island_1.map.data_start * sizeof(VoxelData),
-				renderer.island_1.map.nodes.memory_size()
+				renderer.island_1.map.nodes.memory_size(),
+				false
 			);
 
 			graphics_buffer_apply(
 				graphics,
 				renderer.voxel_data_buffer_handle,
 				renderer.island_2.map.data_start * sizeof(VoxelData),
-				renderer.island_2.map.nodes.memory_size()
+				renderer.island_2.map.nodes.memory_size(),
+				false
 			);
 		}
+
 
 		// this is updated every frame, so it needs to be applied every frame
 		graphics_buffer_apply(
 			graphics,
 			renderer.voxel_data_buffer_handle,
 			renderer.grass_voxel_object.map.data_start * sizeof(VoxelData),
-			renderer.grass_voxel_object.map.nodes.memory_size()
+			renderer.grass_voxel_object.map.nodes.memory_size(),
+			true
 		);
 
 		graphics_write_buffer(graphics, renderer.voxel_info_buffer_handle, sizeof voxel_world_info, &voxel_world_info);
@@ -713,6 +735,8 @@ void engine_gui(Engine & engine)
 		{
 			engine.show_imgui_style_editor = true;
 		}
+
+		ImGui::Value("Player collision", engine.debug.collision);
 
 	}
 	ImGui::End();

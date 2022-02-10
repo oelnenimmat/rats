@@ -113,3 +113,9 @@ struct MemoryCopyJob
 	}
 };
 */
+
+template<typename T>
+void clear_memory(T & t)
+{
+	memset(&t, 0, sizeof(t));
+}

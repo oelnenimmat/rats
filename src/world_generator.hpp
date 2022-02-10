@@ -3,7 +3,7 @@
 #include "math.hpp"
 #include "Noise.hpp"
 #include "Gradient.hpp"
-#include "WorldSettings.hpp"
+#include "World.hpp"
 #include "DebugTerrain.hpp"
 #include "VoxelRenderer.hpp"
 
@@ -16,6 +16,8 @@ void generate_test_world(
 	NoiseSettings const & noise_settings,
 	WorldSettings const & world_settings,
 	VoxelSettings const & voxel_settings,
+	int index,
+	VoxelRenderer & renderer,
 	float * const progress
 )
 {
@@ -25,20 +27,19 @@ void generate_test_world(
 	float VS_to_WS = voxel_settings.VS_to_WS();
 	float WS_to_VS = voxel_settings.WS_to_VS();
 
-	// int voxel_count_per_dimension = rats::min(
-	// 	(int)std::floor(world_settings.world_size * WS_to_VS),
-	// 	voxel_settings.chunks_in_world * voxel_settings.voxels_in_chunk
-	// );
+	float3 position 		= index == 0 ? world_settings.island_1_position : world_settings.island_2_position;
+	float3 size 			= index == 0 ? world_settings.island_1_size : world_settings.island_2_size;
+	Gradient const & colors = index == 0 ? world_settings.island_1_colors : world_settings.island_2_colors;
 
-	int voxel_count_x = rats::min(
-		(int)std::floor(world_settings.world_size * WS_to_VS),
-		voxel_settings.chunks_in_world.x * voxel_settings.voxels_in_chunk
-	);
+	int3 voxel_count = int3(floor(size * WS_to_VS)); // or ceil?
 
-	int voxel_count_z = rats::min(
-		(int)std::floor(world_settings.world_size * WS_to_VS),
-		voxel_settings.chunks_in_world.z * voxel_settings.voxels_in_chunk
-	);
+	int voxel_count_x = voxel_count.x;
+	int voxel_count_z = voxel_count.z;
+
+	voxel_count.y = 80;
+
+	// cannot do in thread
+	allocate_chunks_by_voxels(renderer, voxel_count, target);
 
 	std::cout << "[WORLD]: voxel_count x: " << voxel_count_x << ", z: " << voxel_count_z <<  "\n";
 
@@ -47,7 +48,7 @@ void generate_test_world(
 		for (int x = 0; x < voxel_count_x; x++)
 		{
 			// Add 0.5 to move to center of voxel. y doesn't matter, it is set later
-			float3 world_position 		= float3(x + 0.5, 0,z + 0.5) * VS_to_WS;
+			float3 world_position 		= position + float3(x + 0.5, 0,z + 0.5) * VS_to_WS;
 
 			float height 				= terrain.get_height(world_position.xz);
 			int vertical_voxel_count 	= rats::max(1, (int)std::floor(height * WS_to_VS));
@@ -63,10 +64,10 @@ void generate_test_world(
 
 					if (y == vertical_voxel_count - 1)
 					{
-						float3 world_position_neg_x = float3(x - 1 + 0.5, 0, z + 0.5) * VS_to_WS;
-						float3 world_position_pos_x = float3(x + 1 + 0.5, 0, z + 0.5) * VS_to_WS;
-						float3 world_position_neg_z = float3(x + 0.5, 0, z - 1 + 0.5) * VS_to_WS;
-						float3 world_position_pos_z = float3(x + 0.5, 0, z + 1 + 0.5) * VS_to_WS;
+						float3 world_position_neg_x = position + float3(x - 1 + 0.5, 0, z + 0.5) * VS_to_WS;
+						float3 world_position_pos_x = position + float3(x + 1 + 0.5, 0, z + 0.5) * VS_to_WS;
+						float3 world_position_neg_z = position + float3(x + 0.5, 0, z - 1 + 0.5) * VS_to_WS;
+						float3 world_position_pos_z = position + float3(x + 0.5, 0, z + 1 + 0.5) * VS_to_WS;
 
 						float height_at_neg_x = terrain.get_height(world_position_neg_x.xz);
 						float height_at_pos_x = terrain.get_height(world_position_pos_x.xz);
@@ -114,7 +115,7 @@ void generate_test_world(
 				// world_position.y = y * VS_to_WS;
 				float n = noise.evaluate(world_position.zx) / 2 + 0.5f;
 				n += color_hash.eat(x).eat(y).eat(z).get_float_A_01() * 0.08f - 0.04f;
-				float3 color = world_settings.colors.evaluate(n).rgb;
+				float3 color = colors.evaluate(n).rgb;
 				
 				if (y < vertical_voxel_count - 1)
 				{
@@ -147,14 +148,18 @@ void generate_test_world_in_thread(
 	NoiseSettings const & noise_settings,
 	WorldSettings const & world_settings,
 	VoxelSettings const & voxel_settings,
+	VoxelRenderer & renderer,
 	float * const progress
 )
 {
+	MINIMA_ASSERT(false && "there are 'cannot do in thread's in generate_test_world");
+
 	*progress = 0;
 	auto thread = std::thread([&, progress]()
 	{
-		generate_test_world(target, terrain, noise_settings, world_settings, voxel_settings, progress);
+		generate_test_world(target, terrain, noise_settings, world_settings, voxel_settings, 0, renderer, progress);
 		*progress = 1;
 	});
 	thread.detach();
+
 }

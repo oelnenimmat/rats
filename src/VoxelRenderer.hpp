@@ -1,7 +1,7 @@
 #pragma once
 
 #include "vectors.hpp"
-#include "WorldSettings.hpp"
+#include "World.hpp"
 #include "DrawOptions.hpp"
 #include "ChunkMap.hpp"
 #include "loop.hpp"
@@ -13,11 +13,19 @@
 #include "Camera.hpp"
 #include "Lighting.hpp"
 
+struct DrawWireCubeGpuData
+{
+	int4 count;
+	float4 mins[20];
+	float4 maxs[20];
+};
+
 struct PerFrameUniformBuffer
 {
 	CameraGpuData 		camera;
 	DrawOptionsGpuData 	draw_options;
 	LightingGpuData		lighting;
+	DrawWireCubeGpuData draw_wire_cube_data;
 };
 
 // Packed datastructure for compute shader
@@ -95,6 +103,8 @@ struct VoxelRenderer
 	int voxel_info_buffer_handle;
 	int per_frame_uniform_buffer_handle;
 
+	DrawWireCubeGpuData draw_wire_cube_data;
+
 	VoxelWorldInfo get_voxel_world_info()
 	{
 		VoxelWorldInfo voxel_world_info = {};
@@ -144,10 +154,9 @@ void allocate_chunks(VoxelRenderer & renderer, int3 chunks, VoxelObject & out_ob
 
 	MINIMA_ASSERT((renderer.voxel_buffer_used + element_count) < renderer.voxel_buffer_capacity);
 
-	size_t data_start = renderer.voxel_buffer_used;
-
-	VoxelData * memory = renderer.voxel_buffer_memory + renderer.voxel_buffer_used;
-	renderer.voxel_buffer_used += element_count;
+	size_t data_start 			= renderer.voxel_buffer_used;
+	VoxelData * memory 			= renderer.voxel_buffer_memory + data_start;
+	renderer.voxel_buffer_used 	+= element_count;
 
 	out_object.map.dispose();
 	out_object = {};
@@ -157,6 +166,12 @@ void allocate_chunks(VoxelRenderer & renderer, int3 chunks, VoxelObject & out_ob
 
 	out_object.map.data_start = data_start;
 	out_object.map.nodes = make_slice<VoxelData>(element_count, memory);
+}
+
+void allocate_chunks_by_voxels(VoxelRenderer & renderer, int3 voxels, VoxelObject & out_object)
+{
+	int3 chunks = int3(floor(float3(voxels) / renderer.draw_options->voxel_settings.voxels_in_chunk) + 1);
+	allocate_chunks(renderer, chunks, out_object);
 }
 
 void init(VoxelRenderer & renderer, DrawOptions * draw_options, Graphics * graphics)
@@ -188,12 +203,12 @@ void init(VoxelRenderer & renderer, DrawOptions * draw_options, Graphics * graph
 
 	// These are fixed size
 	// handles are references to buffers on graphics
-	renderer.voxel_info_buffer_handle 		= graphics_create_buffer(graphics, sizeof(VoxelWorldInfo), GraphicsBufferType::uniform);
+	renderer.voxel_info_buffer_handle = graphics_create_buffer(graphics, sizeof(VoxelWorldInfo), GraphicsBufferType::uniform);
 	renderer.per_frame_uniform_buffer_handle = graphics_create_buffer(graphics, sizeof(PerFrameUniformBuffer), GraphicsBufferType::uniform);
 
 	// non handles are integers that match the compute pipeline layout
-	graphics_bind_buffer(graphics, renderer.voxel_info_buffer_handle, voxel_info_buffer, GraphicsBufferType::uniform);
-	graphics_bind_buffer(graphics, renderer.per_frame_uniform_buffer_handle, camera_buffer, GraphicsBufferType::uniform);
+	graphics_bind_buffer(graphics, renderer.voxel_info_buffer_handle, voxel_info_buffer);
+	graphics_bind_buffer(graphics, renderer.per_frame_uniform_buffer_handle, camera_buffer);
 
 	renderer.voxel_buffer_capacity = 256 * 256 * 256;
 	renderer.voxel_data_buffer_handle = graphics_create_buffer(
@@ -201,7 +216,7 @@ void init(VoxelRenderer & renderer, DrawOptions * draw_options, Graphics * graph
 		renderer.voxel_buffer_capacity * sizeof(VoxelData),
 		GraphicsBufferType::storage
 	);
-	graphics_bind_buffer(graphics, renderer.voxel_data_buffer_handle, voxel_data_buffer, GraphicsBufferType::storage);
+	graphics_bind_buffer(graphics, renderer.voxel_data_buffer_handle, voxel_data_buffer);
 
 	renderer.voxel_buffer_used = 0;
 	renderer.voxel_buffer_memory = reinterpret_cast<VoxelData*>(graphics_buffer_get_writeable_memory(graphics, renderer.voxel_data_buffer_handle));
@@ -219,6 +234,24 @@ void prepare_frame(VoxelRenderer & renderer, Allocator & temp_allocator)
 	// copy_slice_data(renderer.island_1_chunk_map.nodes, renderer.chunk_map.nodes);
 	// clear_slice_data(renderer.player_chunk_map.nodes);
 	// clear_slice_data(renderer.npc_chunk_map.nodes);
+
+	clear_memory(renderer.draw_wire_cube_data);
+}
+
+void draw_wire_cube(VoxelRenderer & renderer, float3 min, float3 max)
+{
+	auto & data = renderer.draw_wire_cube_data;
+
+	if (data.count.x >= 20)
+	{
+		return;
+	}
+
+	int index = data.count.x;
+	data.mins[index] = float4(min, 0);
+	data.maxs[index] = float4(max, 0);
+
+	data.count.x += 1;
 }
 
 void draw_cuboid(

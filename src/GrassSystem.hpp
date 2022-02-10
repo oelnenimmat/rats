@@ -228,27 +228,6 @@ namespace gui
 	}
 }
 
-struct bool3
-{
-	bool x, y, z;
-
-	bool3() : x(false), y(false), z(false) {}
-	bool3(bool x, bool y, bool z) : x(x), y(y), z(z) {}
-};
-
-inline bool3 operator < (float3 const & lhs, float3 const & rhs)
-{
-	return bool3(
-		lhs.x < rhs.x,
-		lhs.y < rhs.y,
-		lhs.z < rhs.z
-	);
-}
-
-bool any(bool3 b)
-{
-	return b.x || b.y || b.z;
-}
 
 // void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 world_size)
 void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 world_size, int3 chunk_range_start)

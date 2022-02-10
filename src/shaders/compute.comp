@@ -45,11 +45,19 @@ struct LightingData
 	vec4 ambient_color;	
 };
 
+struct DrawWireCubeData
+{
+	ivec4 count;
+	vec4 mins[20];
+	vec4 maxs[20];
+};
+
 layout(set = PER_FRAME_SET, binding = PER_FRAME_UNIFORM) uniform PerFrame
 {
-	CameraData 		camera_data;
-	DrawOptions 	draw_options;
-	LightingData 	lighting;
+	CameraData 			camera_data;
+	DrawOptions 		draw_options;
+	LightingData 		lighting;
+	DrawWireCubeData 	draw_wire_cube_data;
 } per_frame;
 
 float get_max_distance()
@@ -183,18 +191,28 @@ void main()
 	float depth = ray_depth;
 
 	color = mix(ray_result_color.rgb, color, depth);
-
-
-	// This is wasteful way of doing this. Either do separate compute shader, or actual grpahics pipeline with lines
-	for (int i = 0; i < get_voxel_map_count(); i++)
+	
+	if (per_frame.draw_options.draw_options.z == 1)
 	{
-		if (draw_bounds_2(camera_ray, i))
+		// This is wasteful way of doing this. Either do separate compute shader, or actual grpahics pipeline with lines
+		for (int i = 0; i < get_voxel_map_count(); i++)
 		{
-			color = vec3(1.0, 0.8, 0.1);
-			if (i == 4)
+			if (draw_bounds_2(camera_ray, i))
 			{
-				color = vec3(1, 0, 1);
+				color = vec3(1.0, 0.8, 0.1);
+				if (i == 4)
+				{
+					color = vec3(1, 0, 1);
+				}
 			}
+		}
+	}
+
+	for (int i = 0; i < per_frame.draw_wire_cube_data.count.x; i++)
+	{
+		if (draw_bounds(camera_ray, per_frame.draw_wire_cube_data.mins[i].xyz, per_frame.draw_wire_cube_data.maxs[i].xyz))
+		{
+			color = vec3(0.4, 0.1, 0.9);
 		}
 	}
 

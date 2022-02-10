@@ -12,7 +12,7 @@ bool chunk_is_empty(const ivec3 voxel, int map_index)
 	ivec3 chunk = get_chunk(voxel, map_index);
 	int chunk_index = get_chunk_index(chunk, map_index);
 
-	int data_index = get_range_data_start(map_index) + chunk_index;
+	int data_index = get_chunk_data_start(map_index) + chunk_index;
 
 	if (voxel_data[chunk_index].material_child_offset.z == 0)
 	{
@@ -30,7 +30,7 @@ VoxelData get_chunktree_voxel(const ivec3 voxel, int map_index)
 	int chunk_index = get_chunk_index(get_chunk(voxel, map_index), map_index);
 	int voxel_index = get_voxel_index(transform_voxel_to_local_voxel_space(voxel, map_index) % voxels_in_chunk);
 
-	int data_index = get_range_data_start(map_index) + get_voxel_data_start(map_index) 
+	int data_index = get_voxel_data_start(map_index) 
 					+ chunk_index * voxels_in_chunk * voxels_in_chunk * voxels_in_chunk
 					+ voxel_index;
 

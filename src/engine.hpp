@@ -20,7 +20,7 @@ struct Input;
 #include "EditorCameraController.hpp"
 #include "GameCameraController.hpp"
 #include "GrassSystem.hpp"
-#include "WorldSettings.hpp"
+#include "World.hpp"
 #include "DebugTerrain.hpp"
 #include "DrawOptions.hpp"
 
@@ -65,6 +65,7 @@ struct Engine
 
 	GrassSettings grass_settings;
 	WorldSettings world_settings = {};
+	World world = {};
 
 	// System??
 	VoxelRenderer renderer = {};
@@ -94,6 +95,11 @@ struct Engine
 	static constexpr char const * style_filename = "data/imgui_style.json";
 
 	float world_generation_progress;
+
+	struct
+	{
+		bool collision;
+	} debug;
 };
 
 inline SERIALIZE_STRUCT(Engine const & engine)

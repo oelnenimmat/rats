@@ -3,11 +3,6 @@
 
 bool draw_bounds(Ray camera_ray, vec3 min, vec3 max)
 {
-	if (per_frame.draw_options.draw_options.z == 0)
-	{
-		return false;
-	}
-
 	const float width = 0.05;
 
 	vec3 bounds_min = min;

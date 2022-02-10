@@ -52,15 +52,7 @@ struct DebugTerrain
 
 	float get_height(float2 position_xz_WS) const
 	{
-	#if 0
-		if (position_xz_WS.x > 15)
-		{
-			return settings->height * 2;
-		}
-		return settings->height;
-	#else
 		return (noise.evaluate(position_xz_WS) / 2 + 0.5) * settings->height;
-	#endif
 	}
 
 };

@@ -26,12 +26,14 @@ struct ComputeBuffer
 {
 	bool created = false;
 
+	GraphicsBufferType type;
+
+	bool use_staging_buffer;
+
 	VkDevice device;
 	VkDeviceMemory memory;
 	VkBuffer buffer;
 
-
-	bool use_staging_buffer;
 	VkDeviceMemory staging_memory;
 	VkBuffer staging_buffer;
 	void * mapped_staging_memory;
@@ -595,7 +597,7 @@ void graphics_destroy_buffer(Graphics * context, int buffer_handle)
 	context->per_frame_buffer_pool.free(buffer_handle);
 }
 
-bool graphics_bind_buffer(Graphics * context, int buffer_handle, int index_in_shader, GraphicsBufferType buffer_type)
+bool graphics_bind_buffer(Graphics * context, int buffer_handle, int index_in_shader)
 {
 	/*
 	bug fixed: buffer_handle was used in index_in_shader's place in vk_write_descriptor_set. That secretly worked
@@ -603,6 +605,8 @@ bool graphics_bind_buffer(Graphics * context, int buffer_handle, int index_in_sh
 	*/
 
 	ComputeBuffer & buffer = context->per_frame_buffer_pool[buffer_handle];
+	GraphicsBufferType buffer_type = buffer.type;
+
 
 	VkDescriptorBufferInfo buffer_infos [context->virtual_frame_count];	
 	VkWriteDescriptorSet writes [context->virtual_frame_count];
@@ -712,10 +716,15 @@ void ComputeBuffer::create(Graphics * context, size_t size, GraphicsBufferType t
 	VULKAN_HANDLE_ERROR(allocate_buffer_memory(context, buffer, memory_properties_from(type), &memory));
 	VULKAN_HANDLE_ERROR(vkBindBufferMemory(device, buffer, memory, 0));
 
+	for (int i = 0; i < context->virtual_frame_count; i++)
+	{
+		buffer_offsets[i] = i * single_buffer_memory_size;
+	}
+
 
 	if (type == GraphicsBufferType::storage)
 	{
-		use_staging_buffer = true;
+		this->use_staging_buffer = true;
 		// Create staging buffer
 		VULKAN_HANDLE_ERROR(create_buffer(device, single_buffer_memory_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &staging_buffer));
 		VULKAN_HANDLE_ERROR(allocate_buffer_memory(context, staging_buffer, memory_properties_from(GraphicsBufferType::uniform), &staging_memory));
@@ -724,21 +733,22 @@ void ComputeBuffer::create(Graphics * context, size_t size, GraphicsBufferType t
 	}
 	else
 	{
-		use_staging_buffer = false;
+		this->use_staging_buffer = false;
 	
 		void * mapped_memory;
 		VULKAN_HANDLE_ERROR(vkMapMemory(device, memory, 0, VK_WHOLE_SIZE, 0, &mapped_memory));
 
 		for (int i = 0; i < context->virtual_frame_count; i++)
 		{
-			VkDeviceSize offset = i * single_buffer_memory_size;
-			buffer_offsets[i] = offset;
-			mapped_memories[i] = reinterpret_cast<uint8_t*>(mapped_memory) + offset;
+			// VkDeviceSize offset = i * single_buffer_memory_size;
+			// buffer_offsets[i] = offset;
+			mapped_memories[i] = reinterpret_cast<uint8_t*>(mapped_memory) + buffer_offsets[i];
 		}
 	}
 
 	this->size = size;
-	created = true;
+	this->type = type;
+	this->created = true;
 }
 
 void ComputeBuffer::destroy()
@@ -776,21 +786,47 @@ void * graphics_buffer_get_writeable_memory(Graphics * context, int buffer_handl
 	}
 }
 
-void graphics_buffer_apply(Graphics * context, int buffer_handle, size_t data_start, size_t data_length)
+// update_every_frame is a little contradictory, it means if this function is called every frame or not.
+// if it is, only single virtual frame's buffer partition is updated, otherwise, every virtual frame is updated
+void graphics_buffer_apply(
+	Graphics * context,
+	int buffer_handle,
+	size_t data_start,
+	size_t data_length,
+	bool update_every_frame
+)
 {
 	// MINIMA_ASSERT( frame has started and command buffer is available )
 
-
 	ComputeBuffer & buffer = context->per_frame_buffer_pool[buffer_handle];
-
 	int frame_index = context->current_frame_index;
+
 	auto cmd = get_current_frame(context).command_buffer;
 
-	VkBufferCopy copy =
+	if (update_every_frame)
 	{
-		data_start, // staging buffer
-		data_start + (frame_index * buffer.single_buffer_memory_size), // actual buffer, offset to current frame's allocated portion
-		data_length,
-	};
-	vkCmdCopyBuffer(cmd, buffer.staging_buffer, buffer.buffer, 1, &copy);
+		VkBufferCopy copy =
+		{
+			data_start, // staging buffer
+			data_start + (frame_index * buffer.single_buffer_memory_size), // actual buffer, offset to current frame's allocated portion
+			data_length,
+		};
+		vkCmdCopyBuffer(cmd, buffer.staging_buffer, buffer.buffer, 1, &copy);
+	}
+	else
+	{
+		VkBufferCopy copies [context->virtual_frame_count] = {};
+
+		for(int i = 0; i < context->virtual_frame_count; i++)
+		{
+			copies[i] = 
+			{
+				data_start,
+				data_start + (i * buffer.single_buffer_memory_size), // actual buffer, offset to current frame's allocated portion
+				data_length
+			};
+		}
+
+		vkCmdCopyBuffer(cmd, buffer.staging_buffer, buffer.buffer, context->virtual_frame_count, copies);
+	}
 }

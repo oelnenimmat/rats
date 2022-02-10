@@ -142,10 +142,11 @@ struct CharacterUpdateJob
 	Slice<Character> 		characters;
 	Slice<CharacterInput> 	inputs;
 
-	DebugTerrain *	terrain;
-	float3  		min_position;
-	float3  		max_position;
-	float  			delta_time;
+	// DebugTerrain *	terrain;
+	World * world;
+	float3  min_position;
+	float3  max_position;
+	float  	delta_time;
 
 	void execute(int i)
 	{
@@ -160,9 +161,11 @@ struct CharacterUpdateJob
 		float3 movement = float3(input.move_x, 0, input.move_z) * delta_time * character.speed;
 
 		float3 move_end_position = character.position + movement;
-		move_end_position.y = terrain->get_height(move_end_position.xz);
+		// move_end_position.y = terrain->get_height(move_end_position.xz);
+		move_end_position.y = get_height(*world, move_end_position);
 
-		character.position = clamp(move_end_position, min_position, max_position);
+		// move_end_position = clamp(move_end_position, min_position, max_position);
+		character.position = move_end_position;
 
 		character.y_velocity -= 10 * delta_time;
 
