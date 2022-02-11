@@ -107,6 +107,14 @@ enum struct ComputeShaderDrawMethod : int
 	COUNT
 };
 
+enum struct ComputShaderDrawFlags : int
+{
+	render_bounds 	= 1,
+	wire_cubes 		= 2,
+
+	ALL = render_bounds | wire_cubes
+};
+
 namespace gui
 {
 	bool edit(char const * label, ComputeShaderDrawMode & m)
@@ -131,6 +139,19 @@ namespace gui
 		int * value = reinterpret_cast<int*>(&m);
 		return Combo(label, value, c_strings, (int)ComputeShaderDrawMethod::COUNT);
 	}
+
+
+	bool edit(char const * label, ComputShaderDrawFlags & f)
+	{
+		constexpr char const * c_strings [] = {	"render_bounds", "wire_cubes" };
+		return edit_enum_flags(
+			label,
+			reinterpret_cast<int*>(&f),
+			(int)ComputShaderDrawFlags::ALL,
+			c_strings,
+			array_length(c_strings)
+		);
+	}
 }
 
 struct DrawOptionsGpuData
@@ -145,16 +166,17 @@ struct DrawOptions
 {
 	VoxelSettings voxel_settings;
 
-	ComputeShaderDrawMode draw_mode;
+	ComputeShaderDrawMode 	draw_mode;
 	ComputeShaderDrawMethod draw_method;
-	bool draw_bounds;
+	ComputShaderDrawFlags 	draw_flags;
+
 	float4 debug_options;
 
 	DrawOptionsGpuData get_gpu_data() const
 	{
 		return DrawOptionsGpuData
 		{
-			int4((int)draw_mode, (int)draw_method, (int)draw_bounds, 0),
+			int4((int)draw_mode, (int)draw_method, (int)draw_flags, 0),
 			debug_options
 		};
 	}
@@ -165,7 +187,7 @@ inline SERIALIZE_STRUCT(DrawOptions const & draw_options)
 	serializer.write("voxel_settings", draw_options.voxel_settings);
 	serializer.write("draw_mode", draw_options.draw_mode);
 	serializer.write("draw_method", draw_options.draw_method);
-	serializer.write("draw_bounds", draw_options.draw_bounds);
+	serializer.write("draw_flags", draw_options.draw_flags);
 	serializer.write("debug_options", draw_options.debug_options);
 }
 
@@ -174,7 +196,7 @@ inline DESERIALIZE_STRUCT(DrawOptions & draw_options)
 	serializer.read("voxel_settings", draw_options.voxel_settings);
 	serializer.read("draw_mode", draw_options.draw_mode);
 	serializer.read("draw_method", draw_options.draw_method);
-	serializer.read("draw_bounds", draw_options.draw_bounds);
+	serializer.read("draw_flags", draw_options.draw_flags);
 	serializer.read("debug_options", draw_options.debug_options);
 }
 
@@ -182,13 +204,13 @@ namespace gui
 {
 	inline bool edit(DrawOptions & draw_options)
 	{
-		auto helper = gui_helper();
-		helper.edit("voxel_settings", draw_options.voxel_settings);
-		helper.edit("draw_mode", draw_options.draw_mode);
-		helper.edit("draw_method", draw_options.draw_method);
-		helper.edit("draw_bounds", draw_options.draw_bounds);
-		helper.edit("debug_options", draw_options.debug_options);
-		return helper.dirty;
+		auto gui = gui_helper();
+		gui.edit("voxel_settings", draw_options.voxel_settings);
+		gui.edit("draw_mode", draw_options.draw_mode);
+		gui.edit("draw_method", draw_options.draw_method);
+		gui.edit("draw_flags", draw_options.draw_flags);
+		gui.edit("debug_options", draw_options.debug_options);
+		return gui.dirty;
 	}
 }
 

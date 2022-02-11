@@ -22,6 +22,9 @@ layout(set = 0, binding = 0, rgba8) uniform writeonly image2D result_image;
 // There used to be others, and maybe some new ones will be tried, but now there is one only
 #define DRAW_METHOD_CHUNKTREE 0
 
+#define DRAW_FLAGS_RENDER_BOUNDS 1
+#define DRAW_FLAGS_WIRE_CUBES 2
+
 
 struct CameraData
 {
@@ -34,7 +37,7 @@ struct CameraData
 
 struct DrawOptions
 {
-	ivec4 draw_options; // x: DRAW_MODE_, y: DRAW_METHOD_, z: draw bounds
+	ivec4 draw_options; // x: DRAW_MODE_, y: DRAW_METHOD_, z: draw_flags
 	vec4 debug_options;
 };
 
@@ -108,6 +111,16 @@ int get_draw_mode()
 int get_draw_method()
 {
 	return per_frame.draw_options.draw_options.y;
+}
+
+bool get_draw_render_bounds()
+{
+	return (per_frame.draw_options.draw_options.z & DRAW_FLAGS_RENDER_BOUNDS) != 0;
+}
+
+bool get_draw_wire_cubes()
+{
+	return (per_frame.draw_options.draw_options.z & DRAW_FLAGS_WIRE_CUBES) != 0;
 }
 
 #include "raycast.glsl"
@@ -192,7 +205,7 @@ void main()
 
 	color = mix(ray_result_color.rgb, color, depth);
 	
-	if (per_frame.draw_options.draw_options.z == 1)
+	if (get_draw_render_bounds())
 	{
 		// This is wasteful way of doing this. Either do separate compute shader, or actual grpahics pipeline with lines
 		for (int i = 0; i < get_voxel_map_count(); i++)
@@ -208,11 +221,14 @@ void main()
 		}
 	}
 
-	for (int i = 0; i < per_frame.draw_wire_cube_data.count.x; i++)
+	if (get_draw_wire_cubes())
 	{
-		if (draw_bounds(camera_ray, per_frame.draw_wire_cube_data.mins[i].xyz, per_frame.draw_wire_cube_data.maxs[i].xyz))
+		for (int i = 0; i < per_frame.draw_wire_cube_data.count.x; i++)
 		{
-			color = vec3(0.4, 0.1, 0.9);
+			if (draw_bounds(camera_ray, per_frame.draw_wire_cube_data.mins[i].xyz, per_frame.draw_wire_cube_data.maxs[i].xyz))
+			{
+				color = vec3(0.4, 0.1, 0.9);
+			}
 		}
 	}
 

@@ -5,6 +5,7 @@
 #include "math.hpp"
 #include "DebugTerrain.hpp"
 #include "collisions.hpp"
+#include "VoxelRenderer.hpp"
 
 struct WorldSettings
 {
@@ -87,6 +88,27 @@ void init(World & world, WorldSettings * world_settings, DebugTerrain * terrain)
 {
 	world.settings = world_settings;
 	world.terrain = terrain;
+}
+
+bool test_collision(World const & world, VoxelRenderer const & renderer, float3 bounds_min, float3 bounds_max)
+{
+	float3 island_1_min = world.settings->island_1_position;
+	float3 island_1_max = world.settings->island_1_position + world.settings->island_1_size;
+
+	if (test_AABB_against_AABB(bounds_min, bounds_max, island_1_min, island_1_max))
+	{
+		return test_AABB_against_voxels(bounds_min, bounds_max, renderer, renderer.island_1);
+	}
+
+	float3 island_2_min = world.settings->island_2_position;
+	float3 island_2_max = world.settings->island_2_position + world.settings->island_2_size;
+
+	if (test_AABB_against_AABB(bounds_min, bounds_max, island_2_min, island_2_max))
+	{
+		return test_AABB_against_voxels(bounds_min, bounds_max, renderer, renderer.island_2);
+	}
+
+	return false;
 }
 
 float get_height(World const & world, float3 world_position)

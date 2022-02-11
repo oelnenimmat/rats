@@ -335,7 +335,8 @@ void update_engine(Engine & engine)
 		single_player_character_input,
 		get_debug_input_for_character(engine.debug_character_state_controller, engine.clock.scaled_delta_time) 
 	};
-	int character_count = 2;
+	// int character_count = 2;
+	int character_count = 1;
 
 	auto character_update_job = CharacterUpdateJob
 	{
@@ -344,6 +345,7 @@ void update_engine(Engine & engine)
 
 		// .terrain 		= &engine.debug_terrain,
 		.world 			= &engine.world,
+		.renderer 		= &engine.renderer,
 		.min_position 	= float3(0.5, 0.5, 0.5),
 		.max_position 	= float3(
 			engine.world_settings.world_size - 0.5f,
@@ -384,7 +386,7 @@ void update_engine(Engine & engine)
 
 	// ------------------------------------------------------------------------
 
-	float3 character_bounds_min = engine.character.position + float3(-0.5, 0, -0.5) * engine.character.size;
+	float3 character_bounds_min = engine.character.position + float3(-0.5, 0.5, -0.5) * engine.character.size;
 	float3 character_bounds_max = engine.character.position + float3(0.5, 2, 0.5) * engine.character.size;
 
 	float3 island_1_min = engine.world_settings.island_1_position;
@@ -459,7 +461,7 @@ void render_engine(Engine & engine)
 
 		draw_wire_cube(engine.renderer, float3(0,0,0), float3(2,2,2));
 
-		float3 character_bounds_min = engine.character.position + float3(-0.5, 0, -0.5) * engine.character.size;
+		float3 character_bounds_min = engine.character.position + float3(-0.5, 0.5, -0.5) * engine.character.size;
 		float3 character_bounds_max = engine.character.position + float3(0.5, 2, 0.5) * engine.character.size;
 
 		draw_wire_cube(engine.renderer, character_bounds_min, character_bounds_max);

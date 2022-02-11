@@ -8,6 +8,8 @@
 #include "GameCameraController.hpp"
 #include "memory.hpp"
 
+#include "World.hpp"
+
 struct CharacterInput
 {
 	float move_x;
@@ -143,13 +145,20 @@ struct CharacterUpdateJob
 	Slice<CharacterInput> 	inputs;
 
 	// DebugTerrain *	terrain;
-	World * world;
+	// pointers as references to objects are not good here, as these are supposed to super cache line stuffed
+	// although I don't kow enough, so maybe its okay
+	World const * 			world;
+	VoxelRenderer const * 	renderer;
+
 	float3  min_position;
 	float3  max_position;
 	float  	delta_time;
 
 	void execute(int i)
 	{
+		ASSERT_NOT_NULL(world);
+		ASSERT_NOT_NULL(renderer);
+
 		Character & character 			= characters[i];
 		CharacterInput const & input 	= inputs[i];
 
@@ -161,6 +170,17 @@ struct CharacterUpdateJob
 		float3 movement = float3(input.move_x, 0, input.move_z) * delta_time * character.speed;
 
 		float3 move_end_position = character.position + movement;
+
+		float3 collider_min = move_end_position + float3(-0.5, 0.5, -0.5) * character.size;
+		float3 collider_max = move_end_position + float3(0.5, 2, 0.5) * character.size;
+
+		bool collide = test_collision(*world, *renderer, collider_min, collider_max);
+
+		if (collide)
+		{
+			move_end_position = character.position;
+		}
+
 		// move_end_position.y = terrain->get_height(move_end_position.xz);
 		move_end_position.y = get_height(*world, move_end_position);
 

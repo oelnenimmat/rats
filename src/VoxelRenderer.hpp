@@ -1,7 +1,7 @@
 #pragma once
 
 #include "vectors.hpp"
-#include "World.hpp"
+// #include "World.hpp"
 #include "DrawOptions.hpp"
 #include "ChunkMap.hpp"
 #include "loop.hpp"
@@ -40,6 +40,13 @@ struct VoxelData
 	int & child_offset() { return material_child_offset.y; };
 
 	int & has_children() { return material_child_offset.z; }
+
+	// stupid const here....
+	float3 normal() const { return normal_xyz.xyz; }
+	int material() const { return material_child_offset.x; };
+	int child_offset() const { return material_child_offset.y; };
+
+	int has_children() const { return material_child_offset.z; }
 };
 
 struct VoxelMapRange
@@ -305,4 +312,40 @@ void update_position(
 	int3 start_VS 		= int3(floor(start_WS * WS_to_VS));
 
 	target.position_VS = start_VS;
+}
+
+bool test_AABB_against_voxels(
+	float3 bounds_min, 
+	float3 bounds_max, 
+	VoxelRenderer const & renderer, 
+	VoxelObject const & voxels
+)
+{
+	float3 min_VS = bounds_min * renderer.draw_options->voxel_settings.WS_to_VS();
+	float3 max_VS = bounds_max * renderer.draw_options->voxel_settings.WS_to_VS();
+
+	int3 map_min = voxels.position_VS;
+	int3 map_max = voxels.position_VS + voxels.map.size_in_chunks * renderer.draw_options->voxel_settings.voxels_in_chunk;
+
+	int3 voxel_min = max(int3(floor(min_VS)), map_min);
+	int3 voxel_max = min(int3(floor(max_VS) + 1), map_max);
+	int3 voxel_count = voxel_max - voxel_min;
+
+	bool hit = false;
+
+	voxel_min -= map_min;
+	voxel_max -= map_min;
+
+	for (int z = voxel_min.z; z <= voxel_max.z; z++)
+	for (int y = voxel_min.y; y <= voxel_max.y; y++)
+	for (int x = voxel_min.x; x <= voxel_max.x; x++)
+	{
+		if (get_node(voxels.map, x, y, z).material() > 0)
+		{
+			hit = true;
+			break;
+		}
+	}
+
+	return hit;	
 }

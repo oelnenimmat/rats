@@ -11,9 +11,9 @@
         },
         "jump_power": 6.0,
         "position": {
-            "x": 4.746814727783203,
-            "y": 13.840337753295898,
-            "z": 8.017712593078613
+            "x": 15.940460205078125,
+            "y": 0.0,
+            "z": 15.196203231811523
         },
         "size": 1.0,
         "speed": 5.0,
@@ -22,7 +22,7 @@
             "y": 10.0,
             "z": 10.0
         },
-        "y_position": 13.840337753295898,
+        "y_position": 0.0,
         "y_velocity": 0.0
     },
     "debug_character": {
@@ -48,10 +48,10 @@
         "y_velocity": 0.0
     },
     "debug_terrain_settings": {
-        "height": 9.079999923706055,
+        "height": 6.0,
         "noise_settings": {
             "amplitude": 2.0,
-            "frequency": 0.07000000029802322,
+            "frequency": 0.10000000149011612,
             "seed": 1
         }
     },
@@ -62,7 +62,7 @@
             "y": 10.0,
             "z": 1.159999966621399
         },
-        "draw_bounds": false,
+        "draw_flags": 0,
         "draw_method": 0,
         "draw_mode": 1,
         "voxel_settings": {
@@ -76,27 +76,27 @@
         }
     },
     "editor_camera_controller": {
-        "enabled": false,
+        "enabled": true,
         "move_speed": 10.0,
-        "pan": 11552.65625,
+        "pan": 11374.0322265625,
         "position": {
-            "x": -8.999038696289063,
-            "y": 20.38916015625,
-            "z": -19.90972900390625
+            "x": 28.25594711303711,
+            "y": 22.115039825439453,
+            "z": 22.798458099365234
         },
-        "tilt": -4653.02197265625
+        "tilt": -4646.92578125
     },
     "game_camera_controller": {
         "distance": 15.0,
-        "enabled": true,
+        "enabled": false,
         "move_speed": 10.0,
-        "pan": -8110.70654296875,
+        "pan": -8479.57421875,
         "position": {
-            "x": 1.9705300331115723,
-            "y": 15.147756576538086,
-            "z": 22.700454711914063
+            "x": 11.725804328918457,
+            "y": 8.169700622558594,
+            "z": 27.049161911010742
         },
-        "tilt": 5.000315189361572
+        "tilt": 33.000526428222656
     },
     "grass_settings": {
         "chunk_world_position": {

@@ -253,15 +253,15 @@ inline VECTOR reflect(VECTOR v, VECTOR const & normal)
 	return v;
 }
 
-/*
-inline VECTOR min(VECTOR v, SCALAR s)
-{
-	for (int i = 0; i < DIMENSION; i++)
-	{
-		v.values[i] = std::min(v.values[i], s);
-	}
-	return v;
-}
+
+// inline VECTOR min(VECTOR v, SCALAR s)
+// {
+// 	for (int i = 0; i < DIMENSION; i++)
+// 	{
+// 		v.values[i] = std::min(v.values[i], s);
+// 	}
+// 	return v;
+// }
 
 inline VECTOR min(VECTOR a, VECTOR const & b)
 {
@@ -271,7 +271,7 @@ inline VECTOR min(VECTOR a, VECTOR const & b)
 	}
 	return a;
 }
-*/
+
 inline VECTOR max(VECTOR v, SCALAR s)
 {
 	for (int i = 0; i < DIMENSION; i++)

@@ -150,6 +150,57 @@ namespace gui
 		return DragFloat4(label, &f, 0.01f);
 	}
 
+	inline bool edit_enum_flags(char const * label, int * value, int all_set_value, char const * const names[], int count)
+	{
+		/*
+		// https://stackoverflow.com/questions/109023/how-to-count-the-number-of-set-bits-in-a-32-bit-integer
+		int numberOfSetBits(uint32_t i)
+		{
+		     // Java: use int, and use >>> instead of >>. Or use Integer.bitCount()
+		     // C or C++: use uint32_t
+		     i = i - ((i >> 1) & 0x55555555);        // add pairs of bits
+		     i = (i & 0x33333333) + ((i >> 2) & 0x33333333);  // quads
+		     i = (i + (i >> 4)) & 0x0F0F0F0F;        // groups of 8
+		     return (i * 0x01010101) >> 24;          // horizontal sum of bytes
+		}
+		*/
+		
+		int original_value = *value;
+
+		bool none_set = *value == 0;
+		bool all_set = *value == all_set_value;
+
+		char const * preview = none_set ? "none" : all_set ? "all" : "some";
+
+		bool edited = false;
+
+		if (BeginCombo(label, preview))
+		{
+			if (Checkbox("none", &none_set) && none_set)
+			{
+				*value = 0;
+			}
+
+			if (Checkbox("all", &all_set) && all_set)
+			{
+				*value = all_set_value;
+			}
+
+			for (int i = 0; i < count; i++)
+			{
+				uint32_t flag = 1u << i;
+				bool flag_set = (*value & flag) == flag;
+				if (Checkbox(names[i], &flag_set))
+				{
+					*value ^= flag;
+				}
+			}
+			EndCombo();
+		}
+
+		return original_value == *value;
+	}
+
 /*
 	// Todo(mayybe bad idea...)
 	inline void default_display(char const * name, int const & i)
