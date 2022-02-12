@@ -26,6 +26,7 @@ struct GrassSettings
 	float2  		world_min;
 	float2  		world_max;
 	float3 			chunk_world_position;
+	float3 			parent_position;
 };
 
 inline SERIALIZE_STRUCT(GrassSettings const & grass_settings)
@@ -43,6 +44,7 @@ inline SERIALIZE_STRUCT(GrassSettings const & grass_settings)
 	serializer.write("world_min", grass_settings.world_min);
 	serializer.write("world_max", grass_settings.world_max);
 	serializer.write("chunk_world_position", grass_settings.chunk_world_position);
+	serializer.write("parent_position", grass_settings.parent_position);
 }
 
 inline DESERIALIZE_STRUCT(GrassSettings & grass_settings)
@@ -60,6 +62,7 @@ inline DESERIALIZE_STRUCT(GrassSettings & grass_settings)
 	serializer.read("world_min", grass_settings.world_min);
 	serializer.read("world_max", grass_settings.world_max);
 	serializer.read("chunk_world_position", grass_settings.chunk_world_position);
+	serializer.read("parent_position", grass_settings.parent_position);
 }
 
 namespace gui
@@ -80,6 +83,7 @@ namespace gui
 		gui.edit("world_min", grass_settings.world_min);
 		gui.edit("world_max", grass_settings.world_max);
 		gui.edit("chunk_world_position", grass_settings.chunk_world_position);
+		gui.edit("parent_position", grass_settings.parent_position);
 		return gui.dirty;
 	}
 }
@@ -186,7 +190,7 @@ void generate_grass(GrassSystem & grass)
 		float3 position;
 		position.xz = random_float2(grass.settings->world_min, grass.settings->world_max);
 		position.y = grass.terrain->get_height(position.xz);
-		grass.roots_WS[i] = position;
+		grass.roots_WS[i] = position + grass.settings->parent_position;
 
 		// float length = random_float(0.9, 1.1) * grass.settings->length;
 		// grass.tips_LS[i] = normalize(grass.settings->direction) * length;
@@ -230,15 +234,13 @@ namespace gui
 
 
 // void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 world_size)
-void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 world_size, int3 chunk_range_start)
+void draw_grass(
+	GrassSystem const & grass,
+	VoxelRenderer & renderer,
+	float3 world_size,
+	int3 offset_VS
+)
 {
-	// void draw_cuboid(
-	// VoxelRenderer const & renderer,
-	// float size,
-	// float3 color,
-	// VoxelObject & target
-
-
 
 	clear_slice_data(renderer.grass_voxel_object.map.nodes);
 
@@ -270,8 +272,8 @@ void draw_grass(GrassSystem const & grass, VoxelRenderer & renderer, float3 worl
 
 		// if (any(range_start_WS < root))
 
-		int3 start_VS = int3(floor(root * WS_to_VS));
-		int3 end_VS = int3(floor((root + tip) * WS_to_VS));
+		int3 start_VS = int3(floor(root * WS_to_VS));// + offset_VS;
+		int3 end_VS = int3(floor((root + tip) * WS_to_VS));// + offset_VS;
 
 		int steps = end_VS.y - start_VS.y;
 

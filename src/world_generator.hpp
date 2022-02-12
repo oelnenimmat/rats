@@ -21,8 +21,8 @@ void generate_test_world(
 	float * const progress
 )
 {
-	Noise2D noise 				= make_noise(noise_settings);
-	auto color_hash 			= SmallXXHash::seed(32);
+	Noise2D noise 	= make_noise(noise_settings);
+	auto color_hash = SmallXXHash::seed(32);
 
 	float VS_to_WS = voxel_settings.VS_to_WS();
 	float WS_to_VS = voxel_settings.WS_to_VS();

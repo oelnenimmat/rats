@@ -8,18 +8,12 @@
 
 bool chunk_is_empty(const ivec3 voxel, int map_index)
 {
-	// ivec3 chunk 	= voxel / get_voxels_in_chunk();
-	ivec3 chunk = get_chunk(voxel, map_index);
+
+	ivec3 chunk 	= transform_voxel_to_local_chunk_space(voxel, map_index);
 	int chunk_index = get_chunk_index(chunk, map_index);
+	int data_index 	= get_chunk_data_start(map_index) + chunk_index;
 
-	int data_index = get_chunk_data_start(map_index) + chunk_index;
-
-	if (voxel_data[chunk_index].material_child_offset.z == 0)
-	{
-		return true;
-	}
-
-	return false;
+	return get_chunk_is_empty(voxel_data[data_index]);
 }
 
 VoxelData get_chunktree_voxel(const ivec3 voxel, int map_index)
@@ -27,7 +21,7 @@ VoxelData get_chunktree_voxel(const ivec3 voxel, int map_index)
 	int voxels_in_chunk = get_voxels_in_chunk();
 
 	// int chunk_index = get_chunk_index(voxel / voxels_in_chunk);
-	int chunk_index = get_chunk_index(get_chunk(voxel, map_index), map_index);
+	int chunk_index = get_chunk_index(transform_voxel_to_local_chunk_space(voxel, map_index), map_index);
 	int voxel_index = get_voxel_index(transform_voxel_to_local_voxel_space(voxel, map_index) % voxels_in_chunk);
 
 	int data_index = get_voxel_data_start(map_index) 
@@ -223,8 +217,13 @@ vec4 _traverse_chunktree(const Ray ray, float max_distance, int map_index, out f
 
 		if (chunk_is_empty(voxel, map_index))
 		{
+			// If voxels map is not aligned at full voxels, this will jump too far if do not take that
+			// into consideration
+			ivec3 voxel_offset_from_full_chunks = voxel_world_info.ranges[map_index].offset_in_voxels.xyz % get_voxels_in_chunk();
+			vec3 global_to_local_chunk_space_offset = voxel_offset_from_full_chunks * get_VS_to_WS();
+
 			// CS = Chunk Space
-			vec3 position_CS 							= position_WS * get_WS_to_CS();
+			vec3 position_CS 							= (position_WS  - global_to_local_chunk_space_offset) * get_WS_to_CS();
 			vec3 t_max_CS 								= (step(0, direction_VS) - fract(position_CS)) / direction_VS;
 			vec3 t_max_WS 								= t_max_CS * get_CS_to_WS();
 			float t_max_min_WS 							= min(min(t_max_WS.x, t_max_WS.y), t_max_WS.z);

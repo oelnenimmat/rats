@@ -92,12 +92,17 @@ void init(World & world, WorldSettings * world_settings, DebugTerrain * terrain)
 
 bool test_collision(World const & world, VoxelRenderer const & renderer, float3 bounds_min, float3 bounds_max)
 {
+	bool hit = false;
+
 	float3 island_1_min = world.settings->island_1_position;
 	float3 island_1_max = world.settings->island_1_position + world.settings->island_1_size;
 
 	if (test_AABB_against_AABB(bounds_min, bounds_max, island_1_min, island_1_max))
 	{
-		return test_AABB_against_voxels(bounds_min, bounds_max, renderer, renderer.island_1);
+		if (test_AABB_against_voxels(bounds_min, bounds_max, renderer, renderer.island_1))
+		{
+			hit = true;
+		}
 	}
 
 	float3 island_2_min = world.settings->island_2_position;
@@ -105,10 +110,13 @@ bool test_collision(World const & world, VoxelRenderer const & renderer, float3 
 
 	if (test_AABB_against_AABB(bounds_min, bounds_max, island_2_min, island_2_max))
 	{
-		return test_AABB_against_voxels(bounds_min, bounds_max, renderer, renderer.island_2);
+		if (test_AABB_against_voxels(bounds_min, bounds_max, renderer, renderer.island_2))
+		{
+			hit = true;
+		}
 	}
 
-	return false;
+	return hit;
 }
 
 float get_height(World const & world, float3 world_position)
@@ -133,4 +141,46 @@ float get_height(World const & world, float3 world_position)
 	}
 
 	return 0;
+}
+
+
+bool get_closest_height_below_position(World const & world, float3 position, float * out_height)
+{	
+	bool ok = false;
+	float result = -100000;
+
+	float3 bounds_min = position + float3(-0.5, 0, -0.5);
+	float3 bounds_max = position + float3(0.5, 2, 0.5);
+
+	float3 island_1_min = world.settings->island_1_position;
+	float3 island_1_max = world.settings->island_1_position + world.settings->island_1_size;
+
+	if (test_AABB_against_AABB(bounds_min, bounds_max, island_1_min, island_1_max))
+	{
+		float height = world.terrain->get_height(position.xz) + world.settings->island_1_position.y; 
+		if (height < position.y)
+		{
+			result = std::max(height, result);
+			ok = true;
+		}
+	}
+
+	float3 island_2_min = world.settings->island_2_position;
+	float3 island_2_max = world.settings->island_2_position + world.settings->island_2_size;
+
+	if (test_AABB_against_AABB(bounds_min, bounds_max, island_2_min, island_2_max))
+	{
+		float height = world.terrain->get_height(position.xz) + world.settings->island_2_position.y; 
+		if (height < position.y)
+		{
+			result = std::max(height, result);
+			ok = true;
+		}
+	}
+
+	if (ok)
+	{
+		*out_height = result;
+	}
+	return ok;
 }

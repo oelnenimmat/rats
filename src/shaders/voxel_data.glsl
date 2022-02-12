@@ -19,18 +19,19 @@ struct VoxelData
 {
 	vec4 color; 	// only xyz
 	vec4 normal; 	// only xyz
-	ivec4 material_child_offset; // x: material, y: child_offset
+	ivec4 material_ignored_has_children; // x: material, y: ignored, z: has_children
 };
 
 int get_material(VoxelData data)
 {
-	return data.material_child_offset.x;
+	return data.material_ignored_has_children.x;
 }
 
-int get_child_offset(VoxelData data)
+bool get_chunk_is_empty(VoxelData data)
 {
-	return data.material_child_offset.y;
+	return data.material_ignored_has_children.z == 0;
 }
+
 
 // ----------------------------------------------------------------------------
 
@@ -103,7 +104,7 @@ ivec3 transform_voxel_to_local_voxel_space(ivec3 voxel_in_global_voxel_space, in
 	return voxel_in_local_voxel_space;
 }
 
-ivec3 get_chunk(ivec3 voxel_in_global_voxel_space, int index)
+ivec3 transform_voxel_to_local_chunk_space(ivec3 voxel_in_global_voxel_space, int index)
 {
 	ivec3 voxel_in_local_voxel_space = transform_voxel_to_local_voxel_space(voxel_in_global_voxel_space, index);
 	ivec3 chunk_in_local_chunk_space = voxel_in_local_voxel_space / get_voxels_in_chunk();

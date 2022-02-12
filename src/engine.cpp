@@ -335,8 +335,8 @@ void update_engine(Engine & engine)
 		single_player_character_input,
 		get_debug_input_for_character(engine.debug_character_state_controller, engine.clock.scaled_delta_time) 
 	};
-	// int character_count = 2;
-	int character_count = 1;
+	int character_count = 2;
+	// int character_count = 1;
 
 	auto character_update_job = CharacterUpdateJob
 	{
@@ -446,7 +446,7 @@ void render_engine(Engine & engine)
 			engine.grass,
 			engine.renderer,
 			world_size,
-			int3(0,0,0)
+			engine.renderer.island_1.position_VS
 		), engine.timings.draw_grass);
 
 	TIMER_END(engine.timings, draw_to_octree);

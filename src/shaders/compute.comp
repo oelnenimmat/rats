@@ -25,7 +25,6 @@ layout(set = 0, binding = 0, rgba8) uniform writeonly image2D result_image;
 #define DRAW_FLAGS_RENDER_BOUNDS 1
 #define DRAW_FLAGS_WIRE_CUBES 2
 
-
 struct CameraData
 {
 	mat4 view;

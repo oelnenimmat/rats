@@ -33,20 +33,18 @@ struct VoxelData
 {
 	float4 color;
 	float4 normal_xyz;
-	int4 material_child_offset;
+	int4 material_ignored_has_children;
 
 	float3 & normal() { return unsafe_cast<float3>(normal_xyz); }
-	int & material() { return material_child_offset.x; };
-	int & child_offset() { return material_child_offset.y; };
+	int & material() { return material_ignored_has_children.x; };
 
-	int & has_children() { return material_child_offset.z; }
+	int & has_children() { return material_ignored_has_children.z; }
 
 	// stupid const here....
 	float3 normal() const { return normal_xyz.xyz; }
-	int material() const { return material_child_offset.x; };
-	int child_offset() const { return material_child_offset.y; };
+	int material() const { return material_ignored_has_children.x; };
 
-	int has_children() const { return material_child_offset.z; }
+	int has_children() const { return material_ignored_has_children.z; }
 };
 
 struct VoxelMapRange

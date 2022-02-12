@@ -182,18 +182,32 @@ struct CharacterUpdateJob
 		}
 
 		// move_end_position.y = terrain->get_height(move_end_position.xz);
-		move_end_position.y = get_height(*world, move_end_position);
+		// move_end_position.y = get_height(*world, move_end_position);
+		float walkable_terrain_height;
+		bool above_walkable_terrain = get_closest_height_below_position(
+			*world, 
+			move_end_position + float3(0, 0.5, 0),
+			&walkable_terrain_height
+		);
 
+		move_end_position.y = walkable_terrain_height;
 		// move_end_position = clamp(move_end_position, min_position, max_position);
 		character.position = move_end_position;
 
 		character.y_velocity -= 10 * delta_time;
+		character.y_velocity = std::max(character.y_velocity, -50.0f); // https://en.wikipedia.org/wiki/Free_fall
 
 		character.y_position += character.y_velocity * delta_time;
-		if (character.y_position < move_end_position.y)
+		
+		// todo: if we moved more than some threshold in frame, check multiple spots alog path to see if went through some objects
+
+		if (above_walkable_terrain)
 		{
-			character.y_position = move_end_position.y;
-			character.y_velocity = 0;
+			if (character.y_position < walkable_terrain_height)
+			{
+				character.y_position = walkable_terrain_height;
+				character.y_velocity = 0;
+			}
 		}
 
 		character.position.y = character.y_position;
