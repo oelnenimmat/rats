@@ -19,7 +19,7 @@ struct EditorCamera
 
 	float move_speed = 10;
 
-	bool enabled = false;
+	// bool enabled = false;
 
 	float4x4 view_matrix;
 
@@ -34,7 +34,7 @@ inline SERIALIZE_STRUCT(EditorCamera const & camera)
 	serializer.write("tilt", camera.tilt);
 	serializer.write("position", camera.position);
 	serializer.write("move_speed", camera.move_speed);
-	serializer.write("enabled", camera.enabled);
+	// serializer.write("enabled", camera.enabled);
 }
 
 inline DESERIALIZE_STRUCT(EditorCamera & camera)
@@ -43,7 +43,7 @@ inline DESERIALIZE_STRUCT(EditorCamera & camera)
 	serializer.read("tilt", camera.tilt);
 	serializer.read("position", camera.position);
 	serializer.read("move_speed", camera.move_speed);
-	serializer.read("enabled", camera.enabled);
+	// serializer.read("enabled", camera.enabled);
 }
 
 namespace gui
@@ -55,7 +55,7 @@ namespace gui
 		gui.edit("tilt", c.tilt);
 		gui.edit("position", c.position);
 		gui.edit("move_speed", c.move_speed);
-		gui.edit("enabled", c.enabled);
+		// gui.edit("enabled", c.enabled);
 		return gui.dirty;
 	}
 }
@@ -63,7 +63,7 @@ namespace gui
 
 void update_camera(EditorCamera & controller, Camera & camera, CameraInput const & input)
 {
-	if (controller.enabled)
+	if (input.mouse_down)
 	{
 		controller.pan += input.look.x;
 		controller.tilt += input.look.y;
@@ -109,10 +109,8 @@ void update_camera(EditorCamera & controller, Camera & camera, CameraInput const
 	}
 	movement *= input.delta_time * controller.move_speed;
 
-	if (controller.enabled)
-	{
-		controller.position += movement;
-	}
+	controller.position += movement;
+
 	controller.view_matrix.column(3) = float4(controller.position, 1);
 
 	camera.view_matrix = controller.view_matrix;

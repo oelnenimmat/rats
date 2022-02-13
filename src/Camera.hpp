@@ -63,6 +63,7 @@ struct CameraInput
 	float3 move;
 	float2 look;
 	float delta_time;
+	bool mouse_down;
 };
 
 CameraInput get_camera_input(Input * input, InputSettings const & input_settings, float delta_time)
@@ -77,7 +78,7 @@ CameraInput get_camera_input(Input * input, InputSettings const & input_settings
 
 	input::get_mouse_movement(input, &result.look.x);
 	result.look *= input_settings.mouse_sensitivity;
-
+	result.mouse_down = input_key_is_down(input, InputKey::mouse_0);
 	result.delta_time = delta_time;
 
 	return result;

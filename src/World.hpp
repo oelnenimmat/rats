@@ -19,6 +19,10 @@ struct WorldSettings
 	float3 island_2_position;
 	float3 island_2_size;
 	Gradient island_2_colors;
+
+	float3 clouds_0_position;
+	float3 clouds_1_position;
+	float3 clouds_2_position;
 };
 
 inline SERIALIZE_STRUCT(WorldSettings const & world_settings)
@@ -33,6 +37,10 @@ inline SERIALIZE_STRUCT(WorldSettings const & world_settings)
 	serializer.write("island_2_position", world_settings.island_2_position);
 	serializer.write("island_2_size", world_settings.island_2_size);
 	serializer.write("island_2_colors", world_settings.island_2_colors);
+	
+	serializer.write("clouds_0_position", world_settings.clouds_0_position);
+	serializer.write("clouds_1_position", world_settings.clouds_1_position);
+	serializer.write("clouds_2_position", world_settings.clouds_2_position);
 }
 
 inline DESERIALIZE_STRUCT(WorldSettings & world_settings)
@@ -47,6 +55,10 @@ inline DESERIALIZE_STRUCT(WorldSettings & world_settings)
 	serializer.read("island_2_position", world_settings.island_2_position);
 	serializer.read("island_2_size", world_settings.island_2_size);
 	serializer.read("island_2_colors", world_settings.island_2_colors);
+
+	serializer.read("clouds_0_position", world_settings.clouds_0_position);
+	serializer.read("clouds_1_position", world_settings.clouds_1_position);
+	serializer.read("clouds_2_position", world_settings.clouds_2_position);
 }
 
 namespace gui
@@ -72,6 +84,12 @@ namespace gui
 		gui.edit("island_2_position", world_settings.island_2_position);
 		gui.edit("island_2_size", world_settings.island_2_size);
 		gui.edit("island_2_colors", world_settings.island_2_colors);
+		
+		Spacing();
+
+		gui.edit("clouds_0_position", world_settings.clouds_0_position);
+		gui.edit("clouds_1_position", world_settings.clouds_1_position);
+		gui.edit("clouds_2_position", world_settings.clouds_2_position);
 
 		return gui.dirty;
 	}

@@ -1,33 +1,13 @@
 Current goal
 
+Think about allocation and deallocation
+	- in game and in editor
+	- in game: mostly no need to reaallocate ever
+	- in editor: many times need to allocate
 
+	--> editor: set up capacities to be enforced, but alloc with malloc in editor
+	--> game: allocate big chunk at start, use that
 
-Make player able to walk to different islands etc.
-	- island creation and rendering properly from island/world settings
-	- runtime recreation of those
-	- collision now works with generated terrain, against noise field
-		-> make also consider island bounds
-
-
-
-
-
-
-collision
-	-> walls etc
-	-> falling when not supported by ground
-
-Falling down, multiple islands, toggle rendering of islands
-
-clouds
-	- assets from magicavoxel
-
-separate voxel data from chunk map
-	-> chunk map only has "pointers" to data
-	-> chunk map is dense
-	-> voxel data is sparse, unordered and in a different buffer
-
-
-
-Render voxel maps like meshes -> separate transform and map
-	-> render a struct with transform and map index
+Mouse interaction with scene
+	- translation gizmos
+	- voxel thing edit

@@ -35,11 +35,6 @@ bool get_chunk_is_empty(VoxelData data)
 
 // ----------------------------------------------------------------------------
 
-layout(std430, set = PER_FRAME_SET, binding = PER_FRAME_VOXEL_DATA) readonly buffer Voxels
-{
-	VoxelData voxel_data [];
-};
-
 struct VoxelMapRange
 {
 	ivec4 data_start;
@@ -47,14 +42,25 @@ struct VoxelMapRange
 	ivec4 size_in_chunks;
 };
 
+layout(set = PER_FRAME_SET, binding = PER_FRAME_VOXEL_OBJECTS) readonly buffer VoxelObjects
+{
+	ivec4 voxel_object_count;
+	VoxelMapRange voxel_objects[];
+};
+
+layout(std430, set = PER_FRAME_SET, binding = PER_FRAME_VOXEL_DATA) readonly buffer Voxels
+{
+	VoxelData voxel_data [];
+};
+
+
 const int max_voxel_map_ranges = 20;
 
 layout(set = PER_FRAME_SET, binding = PER_FRAME_VOXEL_INFO) readonly uniform VoxelWorldInfo
 {
 	// transforms are scale transforms and are same for every range
 	vec4 space_transforms;	// x: WS_to_VS, y: VS_to_WS, z: WS_to_CS, w: CS_to_WS
-	ivec4 voxels_in_chunk_map_count;
-	VoxelMapRange ranges[max_voxel_map_ranges];
+	ivec4 voxels_in_chunk;
 } voxel_world_info;
 
 
@@ -80,27 +86,27 @@ float get_CS_to_WS()
 
 ivec3 get_chunks_in_range(int index)
 {
-	return voxel_world_info.ranges[index].size_in_chunks.xyz;
+	return voxel_objects[index].size_in_chunks.xyz;
 }
 
 int get_voxels_in_chunk()
 {
-	return voxel_world_info.voxels_in_chunk_map_count.x;
+	return voxel_world_info.voxels_in_chunk.x;
 }
 
 int get_voxel_map_count()
 {
-	return voxel_world_info.voxels_in_chunk_map_count.y;
+	return voxel_object_count.x;
 }
 
 int get_chunk_data_start(int index)
 {
-	return voxel_world_info.ranges[index].data_start.x;
+	return voxel_objects[index].data_start.x;
 }
 
 ivec3 transform_voxel_to_local_voxel_space(ivec3 voxel_in_global_voxel_space, int index)
 {
-	ivec3 voxel_in_local_voxel_space = voxel_in_global_voxel_space - voxel_world_info.ranges[index].offset_in_voxels.xyz;
+	ivec3 voxel_in_local_voxel_space = voxel_in_global_voxel_space - voxel_objects[index].offset_in_voxels.xyz;
 	return voxel_in_local_voxel_space;
 }
 
@@ -111,23 +117,23 @@ ivec3 transform_voxel_to_local_chunk_space(ivec3 voxel_in_global_voxel_space, in
 	return chunk_in_local_chunk_space;
 
 	// ivec3 chunk_in_global_chunk_space = voxel_in_global_voxel_space / get_voxels_in_chunk();
-	// return chunk_in_global_chunk_space - voxel_world_info.ranges[index].offset_in_chunks.xyz;
+	// return chunk_in_global_chunk_space - voxel_objects[index].offset_in_chunks.xyz;
 }
 
 
 ivec3 get_voxel_range_min(int map_index)
 {
-	return voxel_world_info.ranges[map_index].offset_in_voxels.xyz;// * get_voxels_in_chunk();
+	return voxel_objects[map_index].offset_in_voxels.xyz;// * get_voxels_in_chunk();
 }
 
 ivec3 get_voxel_range_max(int map_index)
 {
-	return voxel_world_info.ranges[map_index].offset_in_voxels.xyz + (voxel_world_info.ranges[map_index].size_in_chunks.xyz) * get_voxels_in_chunk();
+	return voxel_objects[map_index].offset_in_voxels.xyz + (voxel_objects[map_index].size_in_chunks.xyz) * get_voxels_in_chunk();
 }
 
 // ivec3 get_chunk_range_size(int index)
 // {
-// 	return voxel_world_info.ranges[index].size_in_chunks.xyz;
+// 	return voxel_objects[index].size_in_chunks.xyz;
 // }
 
 // todo: function calls from these could be removed, but it gets messier if those are later changed

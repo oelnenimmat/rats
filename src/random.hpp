@@ -1,14 +1,27 @@
 #pragma once
 
 #include "vectors.hpp"
+#include "easings.hpp"
 
 float random_float_01();
+
+inline float random_float_01(Easing curve)
+{
+	return curve(random_float_01());
+}
 
 inline float random_float(float min, float max)
 {
 	// multiply by range, offset by min
 	return random_float_01() * (max - min) + min;
 }
+
+inline float random_float(float min, float max, Easing curve)
+{
+	// multiply by range, offset by min
+	return curve(random_float_01()) * (max - min) + min;
+}
+
 
 inline float2 random_float2_01()
 {

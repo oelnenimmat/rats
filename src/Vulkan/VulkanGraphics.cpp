@@ -36,13 +36,13 @@ struct ComputeBuffer
 
 	VkDeviceMemory staging_memory;
 	VkBuffer staging_buffer;
-	void * mapped_staging_memory;
+	byte * mapped_staging_memory;
 
 	size_t size;
 	size_t single_buffer_memory_size;
 
 	size_t buffer_offsets [USE_SOMETHING_ELSE_VIRTUAL_FRAME_COUNT];
-	void* mapped_memories [USE_SOMETHING_ELSE_VIRTUAL_FRAME_COUNT];
+	byte * mapped_memories [USE_SOMETHING_ELSE_VIRTUAL_FRAME_COUNT];
 
 	void create(Graphics * context, size_t size, GraphicsBufferType type);
 	void destroy();
@@ -729,20 +729,20 @@ void ComputeBuffer::create(Graphics * context, size_t size, GraphicsBufferType t
 		VULKAN_HANDLE_ERROR(create_buffer(device, single_buffer_memory_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &staging_buffer));
 		VULKAN_HANDLE_ERROR(allocate_buffer_memory(context, staging_buffer, memory_properties_from(GraphicsBufferType::uniform), &staging_memory));
 		VULKAN_HANDLE_ERROR(vkBindBufferMemory(device, staging_buffer, staging_memory, 0));
-		VULKAN_HANDLE_ERROR(vkMapMemory(device, staging_memory, 0, VK_WHOLE_SIZE, 0, &mapped_staging_memory));
+		VULKAN_HANDLE_ERROR(vkMapMemory(device, staging_memory, 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&mapped_staging_memory)));
 	}
 	else
 	{
 		this->use_staging_buffer = false;
 	
-		void * mapped_memory;
-		VULKAN_HANDLE_ERROR(vkMapMemory(device, memory, 0, VK_WHOLE_SIZE, 0, &mapped_memory));
+		byte * mapped_memory;
+		VULKAN_HANDLE_ERROR(vkMapMemory(device, memory, 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&mapped_memory)));
 
 		for (int i = 0; i < context->virtual_frame_count; i++)
 		{
 			// VkDeviceSize offset = i * single_buffer_memory_size;
 			// buffer_offsets[i] = offset;
-			mapped_memories[i] = reinterpret_cast<uint8_t*>(mapped_memory) + buffer_offsets[i];
+			mapped_memories[i] = mapped_memory + buffer_offsets[i];
 		}
 	}
 
@@ -770,7 +770,7 @@ void ComputeBuffer::destroy()
 	*this = {};
 }
 
-void * graphics_buffer_get_writeable_memory(Graphics * context, int buffer_handle)
+byte * graphics_buffer_get_writeable_memory(Graphics * context, int buffer_handle)
 {
 	MINIMA_ASSERT(context->per_frame_buffer_pool.is_in_use(buffer_handle));
 

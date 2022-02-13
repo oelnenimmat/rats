@@ -1,0 +1,8 @@
+struct Scene
+{
+
+};
+
+
+a puzzle where you give too much information to confuse player,
+	- e.g. ladders never move, but also "this ladder does not move in this level"

@@ -10,14 +10,16 @@ layout(set = 0, binding = 0, rgba8) uniform writeonly image2D result_image;
 
 #define PER_FRAME_SET 1
 
-#define PER_FRAME_VOXEL_DATA 0
-#define PER_FRAME_VOXEL_INFO 1
-#define PER_FRAME_UNIFORM 2
+#define PER_FRAME_VOXEL_OBJECTS 0
+#define PER_FRAME_VOXEL_DATA 1
+#define PER_FRAME_VOXEL_INFO 2
+#define PER_FRAME_UNIFORM 3
 
 #define DRAW_MODE_LIT 0
-#define DRAW_MODE_ALBEDO 1
-#define DRAW_MODE_NORMALS 2
-#define DRAW_MODE_DEPTH 3
+#define DRAW_MODE_TOON 1
+#define DRAW_MODE_ALBEDO 2
+#define DRAW_MODE_NORMALS 3
+#define DRAW_MODE_DEPTH 4
 
 // There used to be others, and maybe some new ones will be tried, but now there is one only
 #define DRAW_METHOD_CHUNKTREE 0
@@ -156,8 +158,8 @@ Ray get_camera_ray()
 bool draw_bounds_2(Ray ray, int map_index)
 {
 	// This is wasteful way of doing this. Either do separate compute shader, or actual grpahics pipeline with lines
-	vec3 chunk_range_bounds_min = voxel_world_info.ranges[map_index].offset_in_voxels.xyz * get_VS_to_WS();
-	vec3 chunk_range_bounds_max = chunk_range_bounds_min + voxel_world_info.ranges[map_index].size_in_chunks.xyz * get_CS_to_WS();
+	vec3 chunk_range_bounds_min = voxel_objects[map_index].offset_in_voxels.xyz * get_VS_to_WS();
+	vec3 chunk_range_bounds_max = chunk_range_bounds_min + voxel_objects[map_index].size_in_chunks.xyz * get_CS_to_WS();
 	return draw_bounds(ray, chunk_range_bounds_min, chunk_range_bounds_max);
 }
 
@@ -167,16 +169,29 @@ void main()
 	Ray camera_ray = get_camera_ray();
 
 	vec3 background_color;
+	vec3 sea_color = vec3(0.1, 0.3, 0.5);
+	vec3 air_color;
 	{
 		vec3 dir = camera_ray.direction;
 
 
 		background_color = mix(dir, vec3(1,1,1), 0.7);
+		air_color = mix(-dir, vec3(1,1,1), 0.7);
 		// float avg_value = (dir.x + dir.y + dir.z) / 3 / 2 + 0.5;
 		// // float avg_value = max(max(camera_ray.direction.x, camera_ray.direction.y), camera_ray.direction.z) / 2 + 0.5;
 		// avg_value = smoothstep(0,1, avg_value);
 		// avg_value = avg_value * 0.6 + 0.4;
 		// background_color = mix(background_color, vec3(avg_value, avg_value, avg_value), 0.6);
+
+		background_color = mix(sea_color, background_color, step(-0.15, dir.y));
+
+		// background_color = mix(sea_color, background_color, smoothstep(-0.15, -0.1, dir.y));
+
+		// if (dir.y < -0.15)
+		// {
+		// 	// sea
+		// 	background_color = sea_color;
+		// }
 	}
 	vec3 color = background_color;
 	// color = vec3(0,0,0);
@@ -202,7 +217,10 @@ void main()
 	vec4 ray_result_color = ray_color;
 	float depth = ray_depth;
 
-	color = mix(ray_result_color.rgb, color, depth);
+	if (depth < 1)
+	{
+		color = mix(ray_result_color.rgb, air_color, depth);
+	}
 	
 	if (get_draw_render_bounds())
 	{

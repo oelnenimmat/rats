@@ -28,6 +28,7 @@
 
 #include "world_generator.hpp"
 #include "collisions.hpp"
+#include "Clouds.hpp"
 
 
 static void initialize_engine(Engine&, Graphics*, Window*, Input*);
@@ -46,18 +47,6 @@ void engine_on_window_lose_focus(void * data)
 	engine->window_focused = false;
 
 	window_set_cursor_visible(engine->window, true);
-	switch(engine->camera_mode)
-	{
-		case CameraMode::editor:
-			engine->camera_disabled_because_no_focus = engine->editor_camera_controller.enabled;
-			engine->editor_camera_controller.enabled = false;
-			break;
-
-		case CameraMode::game:
-			engine->camera_disabled_because_no_focus = engine->game_camera_controller.enabled;
-			engine->game_camera_controller.enabled = false;
-			break;
-	}
 }
 
 void engine_on_window_gain_focus(void * data)
@@ -65,16 +54,9 @@ void engine_on_window_gain_focus(void * data)
 	Engine * engine = reinterpret_cast<Engine*>(data);
 	engine->window_focused = true;
 
-	if (engine->camera_disabled_because_no_focus)
+	if (engine->camera_mode == CameraMode::game)
 	{
-		engine->camera_disabled_because_no_focus = false;
 		window_set_cursor_visible(engine->window, false);
-
-		switch(engine->camera_mode)
-		{
-			case CameraMode::editor: engine->editor_camera_controller.enabled = true; break;
-			case CameraMode::game: engine->game_camera_controller.enabled = true; break;
-		}
 	}
 }
 
@@ -86,6 +68,8 @@ void run_engine(Window * window, Graphics * graphics, Input * input)
 	Engine engine{};
 	initialize_engine(engine, graphics, window, input);
 
+	// these should be set inside "initialize_engine", but we are passing the pointer to engine, which is 
+	// currently not available there.
 	window_set_callback(engine.window, WindowCallback_on_lose_focus, &engine, engine_on_window_lose_focus);
 	window_set_callback(engine.window, WindowCallback_on_gain_focus, &engine, engine_on_window_gain_focus);
 
@@ -155,8 +139,8 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 
 	// -----------------------------------------------------------------
 
-	engine.editor_camera_controller.enabled = false;
-	engine.game_camera_controller.enabled = false;
+	engine.camera_mode = CameraMode::editor;
+	// engine.game_camera_controller.enabled = false;
 	window_set_cursor_visible(window, true);
 
 	// -----------------------------------------------------------------
@@ -171,6 +155,7 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 	engine.debug_terrain.init(engine.debug_terrain_settings);
 	init(engine.grass, &engine.grass_settings, &global_debug_allocator, &engine.debug_terrain);
  	init(engine.world, &engine.world_settings, &engine.debug_terrain);
+ 	init(engine.clouds, &engine.cloud_settings);
 
 	// todo: make mouse system, and init it
 	for (int i = 0; i < array_length(engine.mouses); i++)
@@ -257,14 +242,37 @@ void update_engine(Engine & engine)
 
 		/// this needs to be allocated also, even though we don't write any data yet
 		allocate_chunks(engine.renderer, chunks_for_grass, engine.renderer.grass_voxel_object);
+
+		// --------------------------------------------------------------------
+
+		int3 chunks_for_clouds = int3(5,2,3);
+
+		static_assert(Clouds::count == VoxelRenderer::cloud_count, "");
+
+		for (int i = 0; i < Clouds::count; i++)
+		{
+			allocate_chunks(engine.renderer, chunks_for_clouds, engine.renderer.clouds[i]);
+			generate_clouds(
+				engine.renderer.clouds[i],
+				engine.draw_options.voxel_settings,
+				float3(chunks_for_clouds) * engine.renderer.draw_options->voxel_settings.CS_to_WS()
+			);
+		}
+
+		// allocate_chunks(engine.renderer, chunks_for_clouds, engine.renderer.cloud_1);
+		// allocate_chunks(engine.renderer, chunks_for_clouds, engine.renderer.cloud_2);
+
+		// generate_clouds(engine.renderer.cloud_1, engine.draw_options.voxel_settings, float3(chunks_for_clouds) * engine.renderer.draw_options->voxel_settings.CS_to_WS());
+		// generate_clouds(engine.renderer.cloud_2, engine.draw_options.voxel_settings, float3(chunks_for_clouds) * engine.renderer.draw_options->voxel_settings.CS_to_WS());
 	}
 
 	// ---------------------------------------------------------------------
 
 	if (input_key_went_down(input, InputKey::keyboard_escape))
 	{
-		engine.editor_camera_controller.enabled = false;
-		engine.game_camera_controller.enabled = false;
+		// engine.editor_camera_controller.enabled = false;
+		// engine.game_camera_controller.enabled = false;
+		engine.camera_mode = CameraMode::editor;
 		window_set_cursor_visible(window, true);
 	}
 
@@ -279,6 +287,7 @@ void update_engine(Engine & engine)
 
 		// todo: this is replicated code, from initialize_engine
 		GraphicsBufferType buffer_types [per_frame_buffer_count];
+		buffer_types[voxel_object_buffer] = GraphicsBufferType::storage;
 		buffer_types[voxel_data_buffer] = GraphicsBufferType::storage;
 		buffer_types[voxel_info_buffer] = GraphicsBufferType::uniform;
 		buffer_types[camera_buffer] 	= GraphicsBufferType::uniform;
@@ -290,6 +299,7 @@ void update_engine(Engine & engine)
 		bool ok = graphics_create_compute_pipeline(graphics, &layout);
 		MINIMA_ASSERT(ok);
 
+		graphics_bind_buffer(graphics, engine.renderer.voxel_object_buffer_handle, voxel_object_buffer);
 		graphics_bind_buffer(graphics, engine.renderer.voxel_data_buffer_handle, voxel_data_buffer);
 		graphics_bind_buffer(graphics, engine.renderer.voxel_info_buffer_handle, voxel_info_buffer);
 		graphics_bind_buffer(graphics, engine.renderer.per_frame_uniform_buffer_handle, camera_buffer);
@@ -378,6 +388,8 @@ void update_engine(Engine & engine)
 	{
 		jobs.execute();
 		jobs.wait();
+
+		update_clouds(engine.clouds, engine.clock.scaled_delta_time);
 	}
 
 	// These need to be stored back, since we use them as values here, not pointers
@@ -432,6 +444,11 @@ void render_engine(Engine & engine)
 				engine.renderer.grass_voxel_object
 			);		
 
+			for (int i = 0; i < Clouds::count; i++)
+			{
+				update_position(engine.renderer, engine.clouds.positions[i], 0, engine.renderer.clouds[i]);		
+			}
+
 			// TIMER_BEGIN(draw_mouses);
 			// for (MouseState const & mouse : engine.mouses)
 			// {
@@ -459,21 +476,23 @@ void render_engine(Engine & engine)
 			engine.world_settings.island_2_position * engine.draw_options.voxel_settings.WS_to_VS()
 		));
 
-		draw_wire_cube(engine.renderer, float3(0,0,0), float3(2,2,2));
-
 		float3 character_bounds_min = engine.character.position + float3(-0.5, 0.5, -0.5) * engine.character.size;
 		float3 character_bounds_max = engine.character.position + float3(0.5, 2, 0.5) * engine.character.size;
-
+/*
 		draw_wire_cube(engine.renderer, character_bounds_min, character_bounds_max);
 
 		draw_wire_cube(engine.renderer, engine.world_settings.island_1_position, engine.world_settings.island_1_position + engine.world_settings.island_1_size);
 		draw_wire_cube(engine.renderer, engine.world_settings.island_2_position, engine.world_settings.island_2_position + engine.world_settings.island_2_size);
+*/
+		if (engine.clouds.draw_bounds)
+		{
+			draw_wire_cube(engine.renderer, engine.clouds.settings->min, engine.clouds.settings->max);
+		}
 
 	TIMER_BEGIN(setup_draw_buffers);
 
 		VoxelWorldInfo voxel_world_info = renderer.get_voxel_world_info();
-		// LightingGpuData light_data 		= engine.light_settings.get_light_data();
-		
+
 		PerFrameUniformBuffer per_frame_uniform_buffer = {};
 		per_frame_uniform_buffer.camera = engine.camera.get_gpu_data();
 		per_frame_uniform_buffer.camera.render_bounds_min = float4(0,0,0,0);
@@ -530,6 +549,17 @@ void render_engine(Engine & engine)
 				renderer.island_2.map.nodes.memory_size(),
 				false
 			);
+
+			for (int i = 0; i < Clouds::count; i++)
+			{
+				graphics_buffer_apply(
+					graphics,
+					renderer.voxel_data_buffer_handle,
+					renderer.clouds[i].map.data_start * sizeof(VoxelData),
+					renderer.clouds[i].map.nodes.memory_size(),
+					false
+				);
+			}
 		}
 
 
@@ -541,6 +571,18 @@ void render_engine(Engine & engine)
 			renderer.grass_voxel_object.map.nodes.memory_size(),
 			true
 		);
+
+		// this has data of current positions etc, apply every frame. not super big
+		size_t object_buffer_update_size = 15 * sizeof(VoxelObjectGpuData);
+		graphics_buffer_apply(
+			graphics,
+			renderer.voxel_object_buffer_handle, 
+			0, 
+			sizeof(int4) + object_buffer_update_size,
+			true
+		);
+
+
 
 		graphics_write_buffer(graphics, renderer.voxel_info_buffer_handle, sizeof voxel_world_info, &voxel_world_info);
 		graphics_write_buffer(graphics, renderer.per_frame_uniform_buffer_handle, sizeof per_frame_uniform_buffer, &per_frame_uniform_buffer);
@@ -572,6 +614,7 @@ void shutdown_engine(Engine & engine)
 {
 	Serializer::to_file(engine, Engine::save_filenme);
 
+	graphics_destroy_buffer(engine.graphics, engine.renderer.voxel_object_buffer_handle);
 	graphics_destroy_buffer(engine.graphics, engine.renderer.voxel_data_buffer_handle);
 	graphics_destroy_buffer(engine.graphics, engine.renderer.voxel_info_buffer_handle);
 	graphics_destroy_buffer(engine.graphics, engine.renderer.per_frame_uniform_buffer_handle);
@@ -667,16 +710,16 @@ void engine_gui(Engine & engine)
 
 		Separator();
 
-		if (Button("Free camera"))
-		{
-			engine.editor_camera_controller.enabled = true;
-			window_set_cursor_visible(engine.window, false);
-			engine.camera_mode = CameraMode::editor;
-		}
+		// if (Button("Free camera"))
+		// {
+		// 	engine.editor_camera_controller.enabled = true;
+		// 	window_set_cursor_visible(engine.window, false);
+		// 	engine.camera_mode = CameraMode::editor;
+		// }
 
 		if (Button("Game camera"))
 		{
-			engine.game_camera_controller.enabled = true;
+			// engine.game_camera_controller.enabled = true;
 			window_set_cursor_visible(engine.window, false);
 			engine.camera_mode = CameraMode::game;
 		}
@@ -696,8 +739,11 @@ void engine_gui(Engine & engine)
 		collapsing_box("Debug Lighting", engine.light_settings);
 		collapsing_box("World Settings", engine.world_settings);
 		collapsing_box("Grass", engine.grass);
+		collapsing_box("Clouds", engine.clouds);
 		collapsing_box("Draw Options", engine.draw_options);
-		
+		collapsing_box("Renderer", engine.renderer);
+
+
 		if (collapsing_box("Terrain", engine.debug_terrain_settings))
 		{
 			engine.debug_terrain.refresh();

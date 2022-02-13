@@ -289,3 +289,28 @@ inline VECTOR max(VECTOR a, VECTOR const & b)
 	}
 	return a;
 }
+
+inline SCALAR min_component(VECTOR const & v)
+{
+	SCALAR smallest = v.values[0];
+
+	for (int i = 1; i < DIMENSION; i++)
+	{
+		smallest = std::min(smallest, v.values[i]);
+	}
+
+	return smallest;
+}
+
+/*
+inline SCALAR max_component(VECTOR const & v)
+{
+	SCALAR biggest = v.values[0];
+
+	for (int i = 1; i < DIMENSION; i++)
+	{
+		biggest = std::max(biggest, v.values[i]);
+	}
+
+	return biggest;
+}*/

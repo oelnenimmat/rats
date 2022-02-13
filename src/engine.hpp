@@ -14,6 +14,7 @@ struct Input;
 #include "Lighting.hpp"
 #include "Character.hpp"
 #include "Mouse.hpp"
+#include "Clouds.hpp"
 
 
 #include "Camera.hpp"
@@ -64,6 +65,7 @@ struct Engine
 	DebugTerrainSettings debug_terrain_settings = {};
 
 	GrassSettings grass_settings;
+	CloudSettings cloud_settings;
 	WorldSettings world_settings = {};
 	World world = {};
 
@@ -72,11 +74,10 @@ struct Engine
 
 	// Scenery
 	GrassSystem grass = {};
+	Clouds clouds = {};
 	DebugTerrain debug_terrain = {};
 
-
 	CameraMode 	camera_mode;
-	bool 		camera_disabled_because_no_focus = false;
 
 	Character character = {};	
 	Character debug_character = {};	
@@ -113,6 +114,7 @@ inline SERIALIZE_STRUCT(Engine const & engine)
 	serializer.write("noise_settings", engine.noise_settings);
 	serializer.write("light_settings", engine.light_settings);
 	serializer.write("grass_settings", engine.grass_settings);
+	serializer.write("cloud_settings", engine.cloud_settings);
 	serializer.write("world_settings", engine.world_settings);
 	serializer.write("mouse_colors", engine.mouse_colors);
 	serializer.write("draw_options", engine.draw_options);
@@ -130,6 +132,7 @@ inline DESERIALIZE_STRUCT(Engine & engine)
 	serializer.read("noise_settings", engine.noise_settings);
 	serializer.read("light_settings", engine.light_settings);
 	serializer.read("grass_settings", engine.grass_settings);
+	serializer.read("cloud_settings", engine.cloud_settings);
 	serializer.read("world_settings", engine.world_settings);
 	serializer.read("mouse_colors", engine.mouse_colors);
 	serializer.read("draw_options", engine.draw_options);

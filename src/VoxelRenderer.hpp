@@ -47,7 +47,7 @@ struct VoxelData
 	int has_children() const { return material_ignored_has_children.z; }
 };
 
-struct VoxelMapRange
+struct VoxelObjectGpuData
 {
 	int4 data_start;
 	int4 offset_in_voxels;
@@ -61,12 +61,13 @@ struct VoxelWorldInfo
 	int4 voxels_in_chunk_map_count;
 
 	static constexpr int max_voxel_map_ranges = 20;
-	VoxelMapRange ranges[max_voxel_map_ranges];
+	VoxelObjectGpuData objects[max_voxel_map_ranges];
 };
 
 // Note(Leo): defines in compute.comp must match the order of these, they define the pipeline layout
 enum GraphicsPerFrameBufferNames : int
 {
+	voxel_object_buffer,
 	voxel_data_buffer,
 	voxel_info_buffer,
 
@@ -94,16 +95,25 @@ struct VoxelRenderer
 
 	VoxelObject grass_voxel_object;
 
+	static constexpr int cloud_count = 10;
+	VoxelObject clouds [cloud_count];
+
 	Graphics * graphics;
 	DrawOptions * draw_options;
 
 	// Seems suspiciously like an arena allocator
 	// Also seems suspiciosly like overengineered overhead over vulkan stuff
 	// todo: make use graphics "internals" i.e. vulkan graphics directly
-	size_t voxel_buffer_capacity;
-	size_t voxel_buffer_used;
-	VoxelData * voxel_buffer_memory; // "owned", as in loaned from graphics
+	size_t 		voxel_data_buffer_capacity;
+	size_t 		voxel_data_buffer_used;
+	VoxelData * voxel_data_buffer_memory; // "owned", as in loaned from graphics
 
+	size_t   					voxel_object_buffer_memory_size;
+	byte * 						voxel_object_buffer_memory; // memory from graphics
+	int4 * 						voxel_object_count; // alias on the beginning of the object buffer memory
+	Slice<VoxelObjectGpuData> 	voxel_object_data;
+
+	int voxel_object_buffer_handle;
 	int voxel_data_buffer_handle;
 	int voxel_info_buffer_handle;
 	int per_frame_uniform_buffer_handle;
@@ -122,34 +132,62 @@ struct VoxelRenderer
 		);
 		voxel_world_info.voxels_in_chunk_map_count = int4(
 			draw_options->voxel_settings.voxels_in_chunk,
-			5,
+			0,
 			0,
 			0
 		);
 
-		voxel_world_info.ranges[0].data_start 		= int4(island_1.map.data_start, 0, 0, 0);
-		voxel_world_info.ranges[0].offset_in_voxels = int4(island_1.position_VS,0);
-		voxel_world_info.ranges[0].size_in_chunks 	= int4(island_1.map.size_in_chunks, 0);
+		*voxel_object_count = int4(15, 0, 0, 0);
+		voxel_object_data[0].data_start 		= int4(island_1.map.data_start, 0, 0, 0);
+		voxel_object_data[0].offset_in_voxels 	= int4(island_1.position_VS,0);
+		voxel_object_data[0].size_in_chunks 	= int4(island_1.map.size_in_chunks, 0);
 
-		voxel_world_info.ranges[1].data_start 		= int4(island_2.map.data_start, 0, 0, 0);
-		voxel_world_info.ranges[1].offset_in_voxels = int4(island_2.position_VS,0);
-		voxel_world_info.ranges[1].size_in_chunks 	= int4(island_2.map.size_in_chunks, 0);
+		voxel_object_data[1].data_start 		= int4(island_2.map.data_start, 0, 0, 0);
+		voxel_object_data[1].offset_in_voxels 	= int4(island_2.position_VS,0);
+		voxel_object_data[1].size_in_chunks 	= int4(island_2.map.size_in_chunks, 0);
 
-		voxel_world_info.ranges[2].data_start 		= int4(player_voxel_object.map.data_start, 0, 0, 0);
-		voxel_world_info.ranges[2].offset_in_voxels = int4(player_voxel_object.position_VS, 0);
-		voxel_world_info.ranges[2].size_in_chunks 	= int4(player_voxel_object.map.size_in_chunks, 0);		
+		voxel_object_data[2].data_start 		= int4(player_voxel_object.map.data_start, 0, 0, 0);
+		voxel_object_data[2].offset_in_voxels 	= int4(player_voxel_object.position_VS, 0);
+		voxel_object_data[2].size_in_chunks 	= int4(player_voxel_object.map.size_in_chunks, 0);		
 
-		voxel_world_info.ranges[3].data_start 		= int4(npc_voxel_object.map.data_start, 0, 0, 0);
-		voxel_world_info.ranges[3].offset_in_voxels = int4(npc_voxel_object.position_VS, 0);
-		voxel_world_info.ranges[3].size_in_chunks 	= int4(npc_voxel_object.map.size_in_chunks, 0);		
+		voxel_object_data[3].data_start 		= int4(npc_voxel_object.map.data_start, 0, 0, 0);
+		voxel_object_data[3].offset_in_voxels 	= int4(npc_voxel_object.position_VS, 0);
+		voxel_object_data[3].size_in_chunks 	= int4(npc_voxel_object.map.size_in_chunks, 0);		
 
-		voxel_world_info.ranges[4].data_start 		= int4(grass_voxel_object.map.data_start, 0, 0, 0);
-		voxel_world_info.ranges[4].offset_in_voxels = int4(grass_voxel_object.position_VS, 0);
-		voxel_world_info.ranges[4].size_in_chunks 	= int4(grass_voxel_object.map.size_in_chunks, 0);		
+		voxel_object_data[4].data_start 		= int4(grass_voxel_object.map.data_start, 0, 0, 0);
+		voxel_object_data[4].offset_in_voxels 	= int4(grass_voxel_object.position_VS, 0);
+		voxel_object_data[4].size_in_chunks 	= int4(grass_voxel_object.map.size_in_chunks, 0);		
+
+		int cloud_offset = 5;
+		for (int i = 0; i < cloud_count; i++)
+		{
+			voxel_object_data[i + cloud_offset].data_start 		= int4(clouds[i].map.data_start, 0, 0, 0);
+			voxel_object_data[i + cloud_offset].offset_in_voxels 	= int4(clouds[i].position_VS, 0);
+			voxel_object_data[i + cloud_offset].size_in_chunks 	= int4(clouds[i].map.size_in_chunks, 0);		
+		}
 
 		return voxel_world_info;
 	}
 };
+
+namespace gui
+{
+	inline bool edit(VoxelRenderer & renderer)
+	{
+		int voxels_in_chunk_1d = renderer.draw_options->voxel_settings.voxels_in_chunk;
+		int voxels_in_chunk_3d = voxels_in_chunk_1d * voxels_in_chunk_1d * voxels_in_chunk_1d;
+
+		float used_kilo_chunks = ((float)renderer.voxel_data_buffer_used / voxels_in_chunk_3d) / 1000.0f;
+		float capacity_kilo_chunks = ((float)renderer.voxel_data_buffer_capacity / voxels_in_chunk_3d) / 1000.0f;
+		float available_kilo_chunks = capacity_kilo_chunks - used_kilo_chunks;
+
+		// Value("Voxel Data Capacity", renderer.voxel_data_buffer_capacity);
+		Text("Used: %.1f / %.1f K chunks (%.1f%%)", used_kilo_chunks, capacity_kilo_chunks, 100 * used_kilo_chunks / capacity_kilo_chunks);
+		Text("Available: %.1f K chunks", available_kilo_chunks);
+
+		return false;
+	}
+}
 
 void allocate_chunks(VoxelRenderer & renderer, int3 chunks, VoxelObject & out_object)
 {
@@ -157,11 +195,11 @@ void allocate_chunks(VoxelRenderer & renderer, int3 chunks, VoxelObject & out_ob
 	int voxel_count 	= chunk_count * pow3(renderer.draw_options->voxel_settings.voxels_in_chunk);
 	int element_count 	= chunk_count + voxel_count;
 
-	MINIMA_ASSERT((renderer.voxel_buffer_used + element_count) < renderer.voxel_buffer_capacity);
+	MINIMA_ASSERT((renderer.voxel_data_buffer_used + element_count) < renderer.voxel_data_buffer_capacity);
 
-	size_t data_start 			= renderer.voxel_buffer_used;
-	VoxelData * memory 			= renderer.voxel_buffer_memory + data_start;
-	renderer.voxel_buffer_used 	+= element_count;
+	size_t data_start 			= renderer.voxel_data_buffer_used;
+	VoxelData * memory 			= renderer.voxel_data_buffer_memory + data_start;
+	renderer.voxel_data_buffer_used 	+= element_count;
 
 	out_object.map.dispose();
 	out_object = {};
@@ -184,8 +222,8 @@ void init(VoxelRenderer & renderer, DrawOptions * draw_options, Graphics * graph
 	// Note(Leo): this could be taken as a reference instead of pointer, but that is maybe lying,
 	// as it is stored as a pointer anyway. Also, it could be taken AND stored as a reference, and this could
 	// be made into a constructor, but that would not easily enough with loading things from json.
-	MINIMA_ASSERT(draw_options != nullptr);
-	MINIMA_ASSERT(graphics != nullptr);
+	ASSERT_NOT_NULL(draw_options);
+	ASSERT_NOT_NULL(graphics);
 
 	renderer.graphics = graphics;
 	renderer.draw_options = draw_options;
@@ -193,9 +231,10 @@ void init(VoxelRenderer & renderer, DrawOptions * draw_options, Graphics * graph
 	// -----------------------------------------------------------------
 
 	GraphicsBufferType buffer_types[per_frame_buffer_count];
-	buffer_types[voxel_data_buffer] = GraphicsBufferType::storage;
-	buffer_types[voxel_info_buffer] = GraphicsBufferType::uniform;
-	buffer_types[camera_buffer] 	= GraphicsBufferType::uniform;
+	buffer_types[voxel_object_buffer] 	= GraphicsBufferType::storage;
+	buffer_types[voxel_data_buffer] 	= GraphicsBufferType::storage;
+	buffer_types[voxel_info_buffer] 	= GraphicsBufferType::uniform;
+	buffer_types[camera_buffer] 		= GraphicsBufferType::uniform;
 
 	GraphicsPipelineLayout layout = {};
 	layout.per_frame_buffer_count = per_frame_buffer_count;
@@ -215,22 +254,39 @@ void init(VoxelRenderer & renderer, DrawOptions * draw_options, Graphics * graph
 	graphics_bind_buffer(graphics, renderer.voxel_info_buffer_handle, voxel_info_buffer);
 	graphics_bind_buffer(graphics, renderer.per_frame_uniform_buffer_handle, camera_buffer);
 
-	renderer.voxel_buffer_capacity = 256 * 256 * 256;
+	renderer.voxel_data_buffer_capacity = 256 * 256 * 256;
 	renderer.voxel_data_buffer_handle = graphics_create_buffer(
 		graphics, 
-		renderer.voxel_buffer_capacity * sizeof(VoxelData),
+		renderer.voxel_data_buffer_capacity * sizeof(VoxelData),
 		GraphicsBufferType::storage
 	);
 	graphics_bind_buffer(graphics, renderer.voxel_data_buffer_handle, voxel_data_buffer);
 
-	renderer.voxel_buffer_used = 0;
-	renderer.voxel_buffer_memory = reinterpret_cast<VoxelData*>(graphics_buffer_get_writeable_memory(graphics, renderer.voxel_data_buffer_handle));
+	renderer.voxel_data_buffer_used = 0;
+	renderer.voxel_data_buffer_memory = reinterpret_cast<VoxelData*>(graphics_buffer_get_writeable_memory(graphics, renderer.voxel_data_buffer_handle));
+
+	// -----------------------------------------------------------------
+
+	int voxel_object_count = 20;
+
+	renderer.voxel_object_buffer_memory_size = sizeof(int4) + voxel_object_count * sizeof(VoxelObjectGpuData);
+	// size_t voxel_object_buffer_size = sizeof(int4) + voxel_object_count * sizeof(VoxelObjectGpuData);
+	renderer.voxel_object_buffer_handle = graphics_create_buffer(
+		graphics,
+		renderer.voxel_object_buffer_memory_size,
+		GraphicsBufferType::storage
+	);
+	graphics_bind_buffer(graphics, renderer.voxel_object_buffer_handle, voxel_object_buffer);
+
+	renderer.voxel_object_buffer_memory = graphics_buffer_get_writeable_memory(graphics, renderer.voxel_object_buffer_handle);
+	renderer.voxel_object_count 		= reinterpret_cast<int4*>(renderer.voxel_object_buffer_memory);
+	renderer.voxel_object_data 			= make_slice<VoxelObjectGpuData>(voxel_object_count, reinterpret_cast<VoxelObjectGpuData*>(renderer.voxel_object_buffer_memory + sizeof(int4)));
 }
 
 void reset_allocations(VoxelRenderer & renderer)
 {
-	renderer.voxel_buffer_used = 0;
-	memset(renderer.voxel_buffer_memory, 0, renderer.voxel_buffer_capacity * sizeof(VoxelData));
+	renderer.voxel_data_buffer_used = 0;
+	memset(renderer.voxel_data_buffer_memory, 0, renderer.voxel_data_buffer_capacity * sizeof(VoxelData));
 }
 
 // Call prepare_frame always once per frame before drawing dynamic objects

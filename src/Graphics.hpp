@@ -2,6 +2,7 @@
 
 // todo(Leo): maybe make "vector_types.hpp"
 #include "vectors.hpp"
+#include "int_types.hpp"
 
 // Forward declarations, so we don't need headers
 // Todo(Leo): this IS enough, but I'm not sure if it is right choice
@@ -48,7 +49,7 @@ struct GraphicsPipelineLayout
 int graphics_create_buffer(Graphics*, size_t size, GraphicsBufferType type);
 void graphics_destroy_buffer(Graphics*, int buffer_handle);
 bool graphics_bind_buffer(Graphics*, int buffer_handle, int index_in_shader);
-void * graphics_buffer_get_writeable_memory(Graphics*, int buffer_handle);
+byte * graphics_buffer_get_writeable_memory(Graphics*, int buffer_handle);
 void graphics_buffer_apply(
 	Graphics*,
 	int buffer_handle,

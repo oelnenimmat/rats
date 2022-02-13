@@ -16,6 +16,16 @@ struct SwizzleZX
 	operator float2() const { return float2(_x,_z); }
 };
 
+struct SwizzleYZ
+{
+	float _ignored, y, z;
+	void operator = (float2 v)
+	{ 
+		y = v.values[0];
+		z = v.values[1];
+	}
+	operator float2() const { return float2(y,z); }
+};
 
 union float3
 {
@@ -27,10 +37,14 @@ union float3
 	explicit constexpr float3(float v) : x(v), y(v), z(v) {}
 	constexpr float3(float x, float y, float z) : x(x), y(y), z(z) {}
 
+	// float and float2
+	constexpr float3(float x, float2 yz) : x(x), y(yz.values[0]), z(yz.values[1]) {}
+
 	explicit float3(int3 const &);
 
 	SwizzleXZ xz;
 	SwizzleZX zx;
+	SwizzleYZ yz;
 };
 
 #define VECTOR float3

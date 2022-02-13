@@ -93,6 +93,7 @@ namespace gui
 enum struct ComputeShaderDrawMode : int
 {
 	lit = 0,
+	toon,
 	albedo,
 	normals,
 	depth,
@@ -122,6 +123,7 @@ namespace gui
 		constexpr char const * c_strings [] =
 		{
 			"lit",
+			"toon",
 			"albedo",
 			"normals",
 			"depth"

@@ -20,8 +20,6 @@ struct GameCameraController
 	float distance = 10;
 	float move_speed = 10;
 
-	bool enabled = false;
-
 	float4x4 view_matrix;
 
 	float3 right() const;
@@ -36,7 +34,6 @@ inline SERIALIZE_STRUCT(GameCameraController const & game_camera_controller)
 	serializer.write("position", game_camera_controller.position);
 	serializer.write("distance", game_camera_controller.distance);
 	serializer.write("move_speed", game_camera_controller.move_speed);
-	serializer.write("enabled", game_camera_controller.enabled);
 }
 
 inline DESERIALIZE_STRUCT(GameCameraController & game_camera_controller)
@@ -46,7 +43,6 @@ inline DESERIALIZE_STRUCT(GameCameraController & game_camera_controller)
 	serializer.read("position", game_camera_controller.position);
 	serializer.read("distance", game_camera_controller.distance);
 	serializer.read("move_speed", game_camera_controller.move_speed);
-	serializer.read("enabled", game_camera_controller.enabled);
 }
 
 namespace gui
@@ -65,11 +61,8 @@ namespace gui
 
 void update_game_camera(GameCameraController & controller, Camera & camera, CameraInput const & input, float3 target_position)
 {
-	if (controller.enabled)
-	{
-		controller.pan += input.look.x;
-		controller.tilt += input.look.y;
-	}
+	controller.pan += input.look.x;
+	controller.tilt += input.look.y;
 
 	float camera_angle_radians = rats::to_radians(controller.pan);
 	float s = sin(camera_angle_radians);
