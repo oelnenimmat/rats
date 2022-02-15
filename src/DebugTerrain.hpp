@@ -39,11 +39,6 @@ struct DebugTerrain
 	DebugTerrainSettings * settings;
 	Noise2D noise;
 
-	void init(DebugTerrainSettings & settings)
-	{
-		this->settings = &settings;
-		refresh();
-	}
 
 	void refresh()
 	{
@@ -56,3 +51,9 @@ struct DebugTerrain
 	}
 
 };
+
+void init(DebugTerrain & terrain, DebugTerrainSettings * settings)
+{
+	terrain.settings = settings;
+	terrain.refresh();
+}

@@ -41,3 +41,20 @@
     {
         return ColorEdit4(label, &c->r, flags);   
     }
+
+    IMGUI_API void ImGui::Value(char const * label, float2 const & v) { return Text("%s: (%.2f, %.2f)", label, v.x, v.y); }
+    IMGUI_API void ImGui::Value(char const * label, float3 const & v) { return Text("%s: (%.2f, %.2f, %.2f)", label, v.x, v.y, v.z); }
+    IMGUI_API void ImGui::Value(char const * label, float4 const & v) { return Text("%s: (%.2f, %.2f, %.2f, %.2f)", label, v.x, v.y, v.z, v.w); }
+
+    IMGUI_API void ImGui::Value(char const * label, int2 const & v) { return Text("%s: (%i, %i)", label, v.x, v.y); }
+    IMGUI_API void ImGui::Value(char const * label, int3 const & v) { return Text("%s: (%i, %i, %i)", label, v.x, v.y, v.z); }
+    IMGUI_API void ImGui::Value(char const * label, int4 const & v) { return Text("%s: (%i, %i, %i, %i)", label, v.x, v.y, v.z, v.w); }
+
+
+    IMGUI_API void ImGui::Value(float2 const & v) { return Text("(%.2f, %.2f)", v.x, v.y); }
+    IMGUI_API void ImGui::Value(float3 const & v) { return Text("(%.2f, %.2f, %.2f)", v.x, v.y, v.z); }
+    IMGUI_API void ImGui::Value(float4 const & v) { return Text("(%.2f, %.2f, %.2f, %.2f)", v.x, v.y, v.z, v.w); }
+
+    IMGUI_API void ImGui::Value(int2 const & v) { return Text("(%i, %i)", v.x, v.y); }
+    IMGUI_API void ImGui::Value(int3 const & v) { return Text("(%i, %i, %i)", v.x, v.y, v.z); }
+    IMGUI_API void ImGui::Value(int4 const & v) { return Text("(%i, %i, %i, %i)", v.x, v.y, v.z, v.w); }

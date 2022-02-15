@@ -15,7 +15,7 @@ struct LightSettings
 	float3 sun_color;
 	float3 ambient_color;
 
-	LightingGpuData get_light_data()
+	LightingGpuData get_light_data() const
 	{
 		LightingGpuData data = {};
 

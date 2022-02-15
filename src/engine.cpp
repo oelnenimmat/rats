@@ -29,7 +29,7 @@
 #include "world_generator.hpp"
 #include "collisions.hpp"
 #include "Clouds.hpp"
-
+#include "Rats.hpp"
 
 static void initialize_engine(Engine&, Graphics*, Window*, Input*);
 
@@ -145,17 +145,16 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 
 	// -----------------------------------------------------------------
 
-	// Todo(Leo): some of init functions are free functions, some are member. decide  which one is
-	// better and use it everywhere
+	// These init functions are maybe nice,but should they be named separately, like init_renderer
 	// Engine systems?
 	init(engine.renderer, &engine.draw_options, graphics);
 
 	// Game systems?
-
-	engine.debug_terrain.init(engine.debug_terrain_settings);
+	init(engine.debug_terrain, &engine.debug_terrain_settings);
 	init(engine.grass, &engine.grass_settings, &global_debug_allocator, &engine.debug_terrain);
  	init(engine.world, &engine.world_settings, &engine.debug_terrain);
  	init(engine.clouds, &engine.cloud_settings);
+ 	init(engine.rats, engine.persistent_allocator);
 
 	// todo: make mouse system, and init it
 	for (int i = 0; i < array_length(engine.mouses); i++)
@@ -180,24 +179,16 @@ void update_engine(Engine & engine)
 	{
 		int3 chunks_in_character 	= int3(1,2,1);
 		int3 chunks_for_grass 		= int3(4,4,4);
+		int3 chunks_for_rats 		= int3(8,2,8);
 
 		engine.renderer.island_1.map.dispose();
 		engine.renderer.island_2.map.dispose();
 		engine.renderer.player_voxel_object.map.dispose();
 		engine.renderer.npc_voxel_object.map.dispose();
 		engine.renderer.grass_voxel_object.map.dispose();
+		engine.renderer.rats_voxel_object.map.dispose();
 		reset_allocations(engine.renderer);
 		
-		engine.renderer.chunk_map.dispose();
-		engine.voxel_allocator.reset();
-
-		init(
-			engine.renderer.chunk_map,
-			engine.voxel_allocator,
-			engine.draw_options.voxel_settings.chunks_in_world,
-			engine.draw_options.voxel_settings.voxels_in_chunk
-		);
-
 		// generate_test_world_in_thread(
 		generate_test_world(
 			engine.renderer.island_1,
@@ -242,6 +233,7 @@ void update_engine(Engine & engine)
 
 		/// this needs to be allocated also, even though we don't write any data yet
 		allocate_chunks(engine.renderer, chunks_for_grass, engine.renderer.grass_voxel_object);
+		allocate_chunks(engine.renderer, chunks_for_rats, engine.renderer.rats_voxel_object);
 
 		// --------------------------------------------------------------------
 
@@ -258,12 +250,6 @@ void update_engine(Engine & engine)
 				float3(chunks_for_clouds) * engine.renderer.draw_options->voxel_settings.CS_to_WS()
 			);
 		}
-
-		// allocate_chunks(engine.renderer, chunks_for_clouds, engine.renderer.cloud_1);
-		// allocate_chunks(engine.renderer, chunks_for_clouds, engine.renderer.cloud_2);
-
-		// generate_clouds(engine.renderer.cloud_1, engine.draw_options.voxel_settings, float3(chunks_for_clouds) * engine.renderer.draw_options->voxel_settings.CS_to_WS());
-		// generate_clouds(engine.renderer.cloud_2, engine.draw_options.voxel_settings, float3(chunks_for_clouds) * engine.renderer.draw_options->voxel_settings.CS_to_WS());
 	}
 
 	// ---------------------------------------------------------------------
@@ -287,10 +273,9 @@ void update_engine(Engine & engine)
 
 		// todo: this is replicated code, from initialize_engine
 		GraphicsBufferType buffer_types [per_frame_buffer_count];
-		buffer_types[voxel_object_buffer] = GraphicsBufferType::storage;
-		buffer_types[voxel_data_buffer] = GraphicsBufferType::storage;
-		buffer_types[voxel_info_buffer] = GraphicsBufferType::uniform;
-		buffer_types[camera_buffer] 	= GraphicsBufferType::uniform;
+		buffer_types[voxel_object_buffer] 		= GraphicsBufferType::storage;
+		buffer_types[voxel_data_buffer] 		= GraphicsBufferType::storage;
+		buffer_types[per_frame_uniform_buffer] 	= GraphicsBufferType::uniform;
 
 		GraphicsPipelineLayout layout = {};
 		layout.per_frame_buffer_count = per_frame_buffer_count;
@@ -301,8 +286,7 @@ void update_engine(Engine & engine)
 
 		graphics_bind_buffer(graphics, engine.renderer.voxel_object_buffer_handle, voxel_object_buffer);
 		graphics_bind_buffer(graphics, engine.renderer.voxel_data_buffer_handle, voxel_data_buffer);
-		graphics_bind_buffer(graphics, engine.renderer.voxel_info_buffer_handle, voxel_info_buffer);
-		graphics_bind_buffer(graphics, engine.renderer.per_frame_uniform_buffer_handle, camera_buffer);
+		graphics_bind_buffer(graphics, engine.renderer.per_frame_uniform_buffer_handle, per_frame_uniform_buffer);
 
 		std::cout << "[ENGINE]: Recreated compute pipeline\n";
 	}
@@ -405,7 +389,6 @@ void update_engine(Engine & engine)
 	float3 island_1_max = engine.world_settings.island_1_position + engine.world_settings.island_1_size;
 
 	engine.debug.collision = test_AABB_against_AABB(character_bounds_min, character_bounds_max, island_1_min, island_1_max);
-
 }
 
 void render_engine(Engine & engine)
@@ -422,31 +405,34 @@ void render_engine(Engine & engine)
 
 			TIME_FUNCTION(
 				update_position(
-					engine.renderer,
-					engine.character.position,
-					engine.character.size,
-					engine.renderer.player_voxel_object
+					engine.renderer.player_voxel_object,
+					engine.renderer.draw_options->voxel_settings,
+					engine.character.position - float3(engine.character.size / 2, 0, engine.character.size / 2)
 				),
 				engine.timings.draw_character
 			);
 		
 			update_position(
-				engine.renderer,
-				engine.debug_character.position,
-				engine.debug_character.size,
-				engine.renderer.npc_voxel_object
+				engine.renderer.npc_voxel_object,
+				engine.renderer.draw_options->voxel_settings,
+				engine.debug_character.position - float3(engine.debug_character.size / 2, 0, engine.debug_character.size / 2)
 			);		
 
 			update_position(
-				engine.renderer,
-				engine.grass.settings->chunk_world_position,
-				engine.debug_character.size,
-				engine.renderer.grass_voxel_object
+				engine.renderer.grass_voxel_object,
+				engine.renderer.draw_options->voxel_settings,
+				engine.grass.settings->chunk_world_position
 			);		
+
+			update_position(
+				engine.renderer.rats_voxel_object,
+				engine.renderer.draw_options->voxel_settings,
+				engine.rats.settings.world_min
+			);
 
 			for (int i = 0; i < Clouds::count; i++)
 			{
-				update_position(engine.renderer, engine.clouds.positions[i], 0, engine.renderer.clouds[i]);		
+				update_position(engine.renderer.clouds[i], engine.renderer.draw_options->voxel_settings, engine.clouds.positions[i]);		
 			}
 
 			// TIMER_BEGIN(draw_mouses);
@@ -465,6 +451,8 @@ void render_engine(Engine & engine)
 			world_size,
 			engine.renderer.island_1.position_VS
 		), engine.timings.draw_grass);
+
+		draw_rats(engine.rats, engine.renderer);
 
 	TIMER_END(engine.timings, draw_to_octree);
 
@@ -489,33 +477,31 @@ void render_engine(Engine & engine)
 			draw_wire_cube(engine.renderer, engine.clouds.settings->min, engine.clouds.settings->max);
 		}
 
-	TIMER_BEGIN(setup_draw_buffers);
-
-		VoxelWorldInfo voxel_world_info = renderer.get_voxel_world_info();
-
-		PerFrameUniformBuffer per_frame_uniform_buffer = {};
-		per_frame_uniform_buffer.camera = engine.camera.get_gpu_data();
-		per_frame_uniform_buffer.camera.render_bounds_min = float4(0,0,0,0);
-		per_frame_uniform_buffer.camera.render_bounds_max = float4(
-			float3(engine.draw_options.voxel_settings.chunks_in_world) * engine.draw_options.voxel_settings.CS_to_WS(),
-			0
-		);
-		per_frame_uniform_buffer.draw_options = engine.draw_options.get_gpu_data();
-		per_frame_uniform_buffer.lighting = engine.light_settings.get_light_data();
-		per_frame_uniform_buffer.draw_wire_cube_data = engine.renderer.draw_wire_cube_data;
-
-
-	TIMER_END(engine.timings, setup_draw_buffers);
+		if (engine.rats.draw_bounds)
+		{
+			draw_wire_cube(engine.renderer, engine.rats.settings.world_min, engine.rats.settings.world_max);
+		}
 
 	// This must be called before any graphics calls, so that virtual frame index is advanced properly
-	TIME_FUNCTION(graphics_begin_frame(graphics), engine.timings.graphics_begin_frame);
+	TIME_FUNCTION(
+		graphics_begin_frame(graphics),
+		engine.timings.graphics_begin_frame
+	);
+
+	TIME_FUNCTION(
+		setup_per_frame_uniform_buffers(
+			engine.renderer,
+			engine.camera,
+			engine.light_settings
+		),
+		engine.timings.setup_per_frame_uniform_buffers
+	);
 
 	TIMER_BEGIN(copy_to_graphics);
 
 		// Todo(Leo): this is still problematic, since we are not synced with rendering, and this might be updated from cpu
 		// (voxel renderer) while being copied to actual gpu buffer. Now it could be fixed by setting virtual frame
 		// count to 1, but i am not sure if I want to do that yet. It might be okay though.	
-		// also, for some reason these work even if we are supposed to write to first virtual frame's buffer only.
 		if (engine.events.recreate_world)
 		{
 			graphics_buffer_apply(
@@ -562,7 +548,6 @@ void render_engine(Engine & engine)
 			}
 		}
 
-
 		// this is updated every frame, so it needs to be applied every frame
 		graphics_buffer_apply(
 			graphics,
@@ -572,21 +557,13 @@ void render_engine(Engine & engine)
 			true
 		);
 
-		// this has data of current positions etc, apply every frame. not super big
-		size_t object_buffer_update_size = 15 * sizeof(VoxelObjectGpuData);
 		graphics_buffer_apply(
 			graphics,
-			renderer.voxel_object_buffer_handle, 
-			0, 
-			sizeof(int4) + object_buffer_update_size,
+			renderer.voxel_data_buffer_handle,
+			renderer.rats_voxel_object.map.data_start * sizeof(VoxelData),
+			renderer.rats_voxel_object.map.nodes.memory_size(),
 			true
 		);
-
-
-
-		graphics_write_buffer(graphics, renderer.voxel_info_buffer_handle, sizeof voxel_world_info, &voxel_world_info);
-		graphics_write_buffer(graphics, renderer.per_frame_uniform_buffer_handle, sizeof per_frame_uniform_buffer, &per_frame_uniform_buffer);
-
 
 	TIMER_END(engine.timings, copy_to_graphics);
 
@@ -616,7 +593,6 @@ void shutdown_engine(Engine & engine)
 
 	graphics_destroy_buffer(engine.graphics, engine.renderer.voxel_object_buffer_handle);
 	graphics_destroy_buffer(engine.graphics, engine.renderer.voxel_data_buffer_handle);
-	graphics_destroy_buffer(engine.graphics, engine.renderer.voxel_info_buffer_handle);
 	graphics_destroy_buffer(engine.graphics, engine.renderer.per_frame_uniform_buffer_handle);
 
 	platform_memory_release(engine.temp_allocator.return_memory_back_to_where_it_was_received());
@@ -637,7 +613,6 @@ void begin_frame(Engine & engine)
 
 void end_frame(Engine & engine)
 {
-
 	// these were previously on begin_frame, but then we could not spcify events to start the game
 	// and they seem to work well in here also
 	engine.events = {};
@@ -710,16 +685,8 @@ void engine_gui(Engine & engine)
 
 		Separator();
 
-		// if (Button("Free camera"))
-		// {
-		// 	engine.editor_camera_controller.enabled = true;
-		// 	window_set_cursor_visible(engine.window, false);
-		// 	engine.camera_mode = CameraMode::editor;
-		// }
-
 		if (Button("Game camera"))
 		{
-			// engine.game_camera_controller.enabled = true;
 			window_set_cursor_visible(engine.window, false);
 			engine.camera_mode = CameraMode::game;
 		}
@@ -742,7 +709,7 @@ void engine_gui(Engine & engine)
 		collapsing_box("Clouds", engine.clouds);
 		collapsing_box("Draw Options", engine.draw_options);
 		collapsing_box("Renderer", engine.renderer);
-
+		collapsing_box("Rats", engine.rats);
 
 		if (collapsing_box("Terrain", engine.debug_terrain_settings))
 		{

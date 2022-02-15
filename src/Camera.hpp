@@ -9,8 +9,8 @@ struct CameraGpuData
 {
 	float4x4 	view_matrix;
 	float4 		max_distance;
-	float4 		render_bounds_min;
-	float4 		render_bounds_max;
+	// float4 		render_bounds_min;
+	// float4 		render_bounds_max;
 };
 
 struct Camera
@@ -20,7 +20,7 @@ struct Camera
 
 	float4x4 view_matrix;
 
-	CameraGpuData get_gpu_data()
+	CameraGpuData get_gpu_data() const
 	{
 		return
 		{

@@ -21,6 +21,22 @@ namespace ImGui
 
 	IMGUI_API bool ColorEdit3(const char* label, float3 * c, ImGuiColorEditFlags flags = 0);
 	IMGUI_API bool ColorEdit4(const char* label, float4 * c, ImGuiColorEditFlags flags = 0);
+
+	IMGUI_API void Value(char const * label, float2 const & v);
+	IMGUI_API void Value(char const * label, float3 const & v);
+	IMGUI_API void Value(char const * label, float4 const & v);
+
+	IMGUI_API void Value(char const * label, int2 const & v);
+	IMGUI_API void Value(char const * label, int3 const & v);
+	IMGUI_API void Value(char const * label, int4 const & v);
+
+	IMGUI_API void Value(float2 const & v);
+	IMGUI_API void Value(float3 const & v);
+	IMGUI_API void Value(float4 const & v);
+
+	IMGUI_API void Value(int2 const & v);
+	IMGUI_API void Value(int3 const & v);
+	IMGUI_API void Value(int4 const & v);
 }
 
 struct GuiHelper

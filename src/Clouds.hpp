@@ -29,7 +29,6 @@ inline DESERIALIZE_STRUCT(CloudSettings & cloud_settings)
 	serializer.read("direction", cloud_settings.direction);
 }
 
-
 namespace gui
 {
 	inline bool edit(CloudSettings & cloud_settings)

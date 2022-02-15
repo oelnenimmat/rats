@@ -15,6 +15,7 @@ struct Input;
 #include "Character.hpp"
 #include "Mouse.hpp"
 #include "Clouds.hpp"
+#include "Rats.hpp"
 
 
 #include "Camera.hpp"
@@ -69,12 +70,14 @@ struct Engine
 	WorldSettings world_settings = {};
 	World world = {};
 
-	// System??
+	// Engine Systems??
 	VoxelRenderer renderer = {};
 
-	// Scenery
-	GrassSystem grass = {};
-	Clouds clouds = {};
+	// Game Systems??
+	GrassSystem grass 	= {};
+	Clouds clouds 		= {};
+	RatSystem rats 		= {};
+
 	DebugTerrain debug_terrain = {};
 
 	CameraMode 	camera_mode;
@@ -90,7 +93,6 @@ struct Engine
 
 	MouseState mouses [200] = {};
 	Gradient mouse_colors;
-
 
 	static constexpr char const * save_filenme = "data/engine.json";
 	static constexpr char const * style_filename = "data/imgui_style.json";
@@ -119,6 +121,7 @@ inline SERIALIZE_STRUCT(Engine const & engine)
 	serializer.write("mouse_colors", engine.mouse_colors);
 	serializer.write("draw_options", engine.draw_options);
 	serializer.write("debug_terrain_settings", engine.debug_terrain_settings);
+	serializer.write("rat_settings", engine.rats.settings);
 }
 
 inline DESERIALIZE_STRUCT(Engine & engine)
@@ -137,4 +140,5 @@ inline DESERIALIZE_STRUCT(Engine & engine)
 	serializer.read("mouse_colors", engine.mouse_colors);
 	serializer.read("draw_options", engine.draw_options);
 	serializer.read("debug_terrain_settings", engine.debug_terrain_settings);
+	serializer.read("rat_settings", engine.rats.settings);
 }

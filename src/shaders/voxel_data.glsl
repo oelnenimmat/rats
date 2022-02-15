@@ -53,35 +53,25 @@ layout(std430, set = PER_FRAME_SET, binding = PER_FRAME_VOXEL_DATA) readonly buf
 	VoxelData voxel_data [];
 };
 
-
-const int max_voxel_map_ranges = 20;
-
-layout(set = PER_FRAME_SET, binding = PER_FRAME_VOXEL_INFO) readonly uniform VoxelWorldInfo
-{
-	// transforms are scale transforms and are same for every range
-	vec4 space_transforms;	// x: WS_to_VS, y: VS_to_WS, z: WS_to_CS, w: CS_to_WS
-	ivec4 voxels_in_chunk;
-} voxel_world_info;
-
-
+// these are probably not per frame. either, per game/project or per object
 float get_WS_to_VS()
 {
-	return voxel_world_info.space_transforms.x;
+	return per_frame.voxel_settings.space_transforms.x;
 }
 
 float get_VS_to_WS()
 {
-	return voxel_world_info.space_transforms.y;
+	return per_frame.voxel_settings.space_transforms.y;
 }
 
 float get_WS_to_CS()
 {
-	return voxel_world_info.space_transforms.z;
+	return per_frame.voxel_settings.space_transforms.z;
 }
 
 float get_CS_to_WS()
 {
-	return voxel_world_info.space_transforms.w;
+	return per_frame.voxel_settings.space_transforms.w;
 }
 
 ivec3 get_chunks_in_range(int index)
@@ -91,7 +81,7 @@ ivec3 get_chunks_in_range(int index)
 
 int get_voxels_in_chunk()
 {
-	return voxel_world_info.voxels_in_chunk.x;
+	return per_frame.voxel_settings.voxels_in_chunk.x;
 }
 
 int get_voxel_map_count()

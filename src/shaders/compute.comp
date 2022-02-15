@@ -12,8 +12,8 @@ layout(set = 0, binding = 0, rgba8) uniform writeonly image2D result_image;
 
 #define PER_FRAME_VOXEL_OBJECTS 0
 #define PER_FRAME_VOXEL_DATA 1
-#define PER_FRAME_VOXEL_INFO 2
-#define PER_FRAME_UNIFORM 3
+// #define PER_FRAME_VOXEL_INFO 2
+#define PER_FRAME_UNIFORM 2
 
 #define DRAW_MODE_LIT 0
 #define DRAW_MODE_TOON 1
@@ -32,14 +32,21 @@ struct CameraData
 	mat4 view;
 	vec4 max_distance_X_field_of_view_Y;
 
-	vec4 render_bounds_min;
-	vec4 render_bounds_max;
+	// vec4 render_bounds_min;
+	// vec4 render_bounds_max;
 };
 
 struct DrawOptions
 {
 	ivec4 draw_options; // x: DRAW_MODE_, y: DRAW_METHOD_, z: draw_flags
 	vec4 debug_options;
+};
+
+struct VoxelSettings
+{	
+	// transforms are scale transforms and are same for every range
+	vec4 space_transforms;	// x: WS_to_VS, y: VS_to_WS, z: WS_to_CS, w: CS_to_WS
+	ivec4 voxels_in_chunk;
 };
 
 struct LightingData
@@ -60,6 +67,7 @@ layout(set = PER_FRAME_SET, binding = PER_FRAME_UNIFORM) uniform PerFrame
 {
 	CameraData 			camera_data;
 	DrawOptions 		draw_options;
+	VoxelSettings  		voxel_settings;
 	LightingData 		lighting;
 	DrawWireCubeData 	draw_wire_cube_data;
 } per_frame;
@@ -94,15 +102,15 @@ float get_normal_offset()
 	return per_frame.draw_options.debug_options.z;
 }
 
-vec3 get_render_bounds_min()
-{
-	return per_frame.camera_data.render_bounds_min.xyz;
-}
+// vec3 get_render_bounds_min()
+// {
+// 	return per_frame.camera_data.render_bounds_min.xyz;
+// }
 
-vec3 get_render_bounds_max()
-{
-	return per_frame.camera_data.render_bounds_max.xyz;
-}
+// vec3 get_render_bounds_max()
+// {
+// 	return per_frame.camera_data.render_bounds_max.xyz;
+// }
 
 int get_draw_mode()
 {

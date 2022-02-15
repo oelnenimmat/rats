@@ -52,7 +52,7 @@ struct Timings
 
 	// render
 	TimeBuffer draw_to_octree;
-	TimeBuffer setup_draw_buffers;
+	TimeBuffer setup_per_frame_uniform_buffers;
 	TimeBuffer graphics_begin_frame;
 	TimeBuffer copy_to_graphics;
 	TimeBuffer graphics_draw_frame;
@@ -107,7 +107,7 @@ namespace gui
 					PopStyleColor();
 				Unindent();
 
-				Value("setup_draw_buffers", timings.setup_draw_buffers.mean_value);
+				Value("setup_per_frame_uniform_buffers", timings.setup_per_frame_uniform_buffers.mean_value);
 				Value("graphics_begin_frame", timings.graphics_begin_frame.mean_value);
 				Value("copy_to_graphics", timings.copy_to_graphics.mean_value);
 				Value("graphics_draw_frame", timings.graphics_draw_frame.mean_value);

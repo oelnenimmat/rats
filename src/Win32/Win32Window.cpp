@@ -79,13 +79,6 @@ LRESULT window_callback(HWND hwnd, UINT message, WPARAM w_param, LPARAM l_param)
 
 	LRESULT result = ImGui_ImplWin32_WndProcHandler(hwnd, message, w_param, l_param);
 
-
-
-	// if(result != 0)
-	// {
-	// 	return result;
-	// }
-
 	switch(message)
 	{
 		case WM_CLOSE:
@@ -115,41 +108,24 @@ LRESULT window_callback(HWND hwnd, UINT message, WPARAM w_param, LPARAM l_param)
 		case WM_MBUTTONUP:
 		case WM_MOUSEMOVE:
 		{
-			bool handled = win32_input_handle_mouse_event(&window->input, message, w_param, l_param);
-			result = handled ? 0 : ::DefWindowProc(hwnd, message, w_param, l_param);
+			if (ImGui::GetIO().WantCaptureMouse == false)
+			{
+				bool handled = win32_input_handle_mouse_event(&window->input, message, w_param, l_param);
+				result = handled ? 0 : ::DefWindowProc(hwnd, message, w_param, l_param);
+			}
+
 		} break;
 
 		case WM_KEYDOWN:
 		case WM_KEYUP:
 		{
-			// bool handled = ImGui::GetIO().WantCaptureMouse;
-			// if ()
-			bool handled = win32_input_handle_keyboard_event(&window->input, message, w_param, l_param);
-			result = handled ? 0 : ::DefWindowProc(hwnd, message, w_param, l_param);
+			// WM_KEYUP may need to be enabled anyway
+			// if (ImGui::GetIO().WantCaptureKeyboard == false)
+			{
+				bool handled = win32_input_handle_keyboard_event(&window->input, message, w_param, l_param);
+				result = handled ? 0 : ::DefWindowProc(hwnd, message, w_param, l_param);
+			}
 		} break;
-
-		// case WM_ACTIVATE:
-		// {
-		// 	std::cout << "WM_ACTIVATE\n";
-		// 	int status = LOWORD(w_param);
-		// 	bool minimized = HIWORD(w_param);
-
-		// 	switch (status)
-		// 	{
-		// 		case WA_ACTIVE:
-		// 		case WA_CLICKACTIVE:
-		// 			std::cout << "[WINDOW]: activate, " << minimized << "\n";
-		// 			window->callbacks[WindowCallback_on_gain_focus].call();
-		// 			break;
-
-		// 		case WA_INACTIVE:
-		// 			std::cout << "[WINDOW]: inactivate, " << minimized << "\n";
-		// 			window->callbacks[WindowCallback_on_lose_focus].call();
-		// 			break;
-		// 	}
-		// 	result = 0;
-		// } break;
-
 
 		case WM_SETFOCUS:
 			std::cout << "WM_SETFOCUS\n";

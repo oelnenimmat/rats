@@ -241,7 +241,6 @@ void draw_grass(
 	int3 offset_VS
 )
 {
-
 	clear_slice_data(renderer.grass_voxel_object.map.nodes);
 
 	renderer.grass_voxel_object.position_VS 
@@ -275,22 +274,22 @@ void draw_grass(
 		int3 start_VS = int3(floor(root * WS_to_VS));// + offset_VS;
 		int3 end_VS = int3(floor((root + tip) * WS_to_VS));// + offset_VS;
 
-		int steps = end_VS.y - start_VS.y;
+		int steps 		= end_VS.y - start_VS.y;
 
-		float3 lengths = float3(end_VS - start_VS);
+		float3 lengths 	= float3(end_VS - start_VS);
 
-		float length_y = (steps);
-		float step_y = lengths.y / steps;
+		float length_y 	= (steps);
+		float step_y 	= lengths.y / steps;
 	
-		float length_x = ((end_VS.x - start_VS.x));
-		float step_x = lengths.x / steps;
+		float length_x 	= ((end_VS.x - start_VS.x));
+		float step_x 	= lengths.x / steps;
 
-		float length_z = ((end_VS.z - start_VS.z));
-		float step_z = lengths.z / steps;
+		float length_z 	= ((end_VS.z - start_VS.z));
+		float step_z 	= lengths.z / steps;
 
-		auto hash = SmallXXHash::seed(i);
-		float color_t = hash.get_float_B_01();
-		float4 color = grass.settings->colors.evaluate(color_t);
+		auto hash 		= SmallXXHash::seed(i);
+		float color_t 	= hash.get_float_B_01();
+		float4 color 	= grass.settings->colors.evaluate(color_t);
 
 		float3 normal = normalize(grass.tips_LS[i]);
 

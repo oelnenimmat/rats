@@ -20,12 +20,37 @@ struct DrawWireCubeGpuData
 	float4 maxs[20];
 };
 
+// Packed datastructure for compute shader
+struct VoxelSettingsGpuData
+{
+	float4 space_transforms;	// x: WS_to_VS, y: VS_to_WS, z: WS_to_CS, w: CS_to_WS
+	int4 voxels_in_chunk_map_count;
+};
+
+VoxelSettingsGpuData get_gpu_data(VoxelSettings const & voxel_settings)
+{
+	VoxelSettingsGpuData voxel_world_info = {};
+
+	voxel_world_info.space_transforms = float4(
+		voxel_settings.WS_to_VS(),
+		voxel_settings.VS_to_WS(),
+		voxel_settings.WS_to_CS(),
+		voxel_settings.CS_to_WS()
+	);
+
+	voxel_world_info.voxels_in_chunk_map_count = int4(voxel_settings.voxels_in_chunk, 0, 0, 0);
+
+	return voxel_world_info;
+}
+
+
 struct PerFrameUniformBuffer
 {
-	CameraGpuData 		camera;
-	DrawOptionsGpuData 	draw_options;
-	LightingGpuData		lighting;
-	DrawWireCubeGpuData draw_wire_cube_data;
+	CameraGpuData 			camera;
+	DrawOptionsGpuData 		draw_options;
+	VoxelSettingsGpuData 	voxel_settings;
+	LightingGpuData			lighting;
+	DrawWireCubeGpuData 	draw_wire_cube_data;
 };
 
 // Packed datastructure for compute shader
@@ -54,24 +79,14 @@ struct VoxelObjectGpuData
 	int4 size_in_chunks;
 };
 
-// Packed datastructure for compute shader
-struct VoxelWorldInfo
-{
-	float4 space_transforms;	// x: WS_to_VS, y: VS_to_WS, z: WS_to_CS, w: CS_to_WS
-	int4 voxels_in_chunk_map_count;
 
-	static constexpr int max_voxel_map_ranges = 20;
-	VoxelObjectGpuData objects[max_voxel_map_ranges];
-};
 
 // Note(Leo): defines in compute.comp must match the order of these, they define the pipeline layout
 enum GraphicsPerFrameBufferNames : int
 {
 	voxel_object_buffer,
 	voxel_data_buffer,
-	voxel_info_buffer,
-
-	camera_buffer,
+	per_frame_uniform_buffer,
 
 	per_frame_buffer_count
 };
@@ -82,11 +97,26 @@ struct VoxelObject
 	int3 				position_VS;
 };
 
+void update_position(
+	VoxelObject & 			target,
+	VoxelSettings const & 	voxel_settings,
+	float3 const &			position_WS
+)
+{	
+	target.position_VS = int3(floor(position_WS * voxel_settings.WS_to_VS()));;
+}
+
+VoxelObjectGpuData get_gpu_data(VoxelObject const & v)
+{
+	VoxelObjectGpuData d;
+	d.data_start 		= int4(v.map.data_start, 0, 0, 0);
+	d.offset_in_voxels 	= int4(v.position_VS, 0);
+	d.size_in_chunks 	= int4(v.map.size_in_chunks, 0);
+	return d;
+}
+
 struct VoxelRenderer
 {
-	// todo: no need to have this as template rn, maybe
-	ChunkMap<VoxelData> chunk_map;
-
 	VoxelObject island_1;
 	VoxelObject island_2;
 
@@ -94,6 +124,7 @@ struct VoxelRenderer
 	VoxelObject npc_voxel_object;
 
 	VoxelObject grass_voxel_object;
+	VoxelObject rats_voxel_object;
 
 	static constexpr int cloud_count = 10;
 	VoxelObject clouds [cloud_count];
@@ -115,60 +146,65 @@ struct VoxelRenderer
 
 	int voxel_object_buffer_handle;
 	int voxel_data_buffer_handle;
-	int voxel_info_buffer_handle;
 	int per_frame_uniform_buffer_handle;
 
 	DrawWireCubeGpuData draw_wire_cube_data;
-
-	VoxelWorldInfo get_voxel_world_info()
-	{
-		VoxelWorldInfo voxel_world_info = {};
-
-		voxel_world_info.space_transforms = float4(
-			draw_options->voxel_settings.WS_to_VS(),
-			draw_options->voxel_settings.VS_to_WS(),
-			draw_options->voxel_settings.WS_to_CS(),
-			draw_options->voxel_settings.CS_to_WS()
-		);
-		voxel_world_info.voxels_in_chunk_map_count = int4(
-			draw_options->voxel_settings.voxels_in_chunk,
-			0,
-			0,
-			0
-		);
-
-		*voxel_object_count = int4(15, 0, 0, 0);
-		voxel_object_data[0].data_start 		= int4(island_1.map.data_start, 0, 0, 0);
-		voxel_object_data[0].offset_in_voxels 	= int4(island_1.position_VS,0);
-		voxel_object_data[0].size_in_chunks 	= int4(island_1.map.size_in_chunks, 0);
-
-		voxel_object_data[1].data_start 		= int4(island_2.map.data_start, 0, 0, 0);
-		voxel_object_data[1].offset_in_voxels 	= int4(island_2.position_VS,0);
-		voxel_object_data[1].size_in_chunks 	= int4(island_2.map.size_in_chunks, 0);
-
-		voxel_object_data[2].data_start 		= int4(player_voxel_object.map.data_start, 0, 0, 0);
-		voxel_object_data[2].offset_in_voxels 	= int4(player_voxel_object.position_VS, 0);
-		voxel_object_data[2].size_in_chunks 	= int4(player_voxel_object.map.size_in_chunks, 0);		
-
-		voxel_object_data[3].data_start 		= int4(npc_voxel_object.map.data_start, 0, 0, 0);
-		voxel_object_data[3].offset_in_voxels 	= int4(npc_voxel_object.position_VS, 0);
-		voxel_object_data[3].size_in_chunks 	= int4(npc_voxel_object.map.size_in_chunks, 0);		
-
-		voxel_object_data[4].data_start 		= int4(grass_voxel_object.map.data_start, 0, 0, 0);
-		voxel_object_data[4].offset_in_voxels 	= int4(grass_voxel_object.position_VS, 0);
-		voxel_object_data[4].size_in_chunks 	= int4(grass_voxel_object.map.size_in_chunks, 0);		
-
-		int cloud_offset = 5;
-		for (int i = 0; i < cloud_count; i++)
-		{
-			voxel_object_data[i + cloud_offset].data_start 		= int4(clouds[i].map.data_start, 0, 0, 0);
-			voxel_object_data[i + cloud_offset].offset_in_voxels 	= int4(clouds[i].position_VS, 0);
-			voxel_object_data[i + cloud_offset].size_in_chunks 	= int4(clouds[i].map.size_in_chunks, 0);		
-		}
-
-		return voxel_world_info;
-	}
 };
+
+void setup_per_frame_uniform_buffers(VoxelRenderer & renderer, Camera const & camera, LightSettings const & light_settings)
+{
+	PerFrameUniformBuffer per_frame_uniform_buffer 	= {};
+	per_frame_uniform_buffer.camera 				= camera.get_gpu_data();
+	per_frame_uniform_buffer.draw_options 			= renderer.draw_options->get_gpu_data();
+	per_frame_uniform_buffer.voxel_settings 		= get_gpu_data(renderer.draw_options->voxel_settings);
+	per_frame_uniform_buffer.lighting 				= light_settings.get_light_data();
+	per_frame_uniform_buffer.draw_wire_cube_data 	= renderer.draw_wire_cube_data;
+
+	graphics_write_buffer(
+		renderer.graphics,
+		renderer.per_frame_uniform_buffer_handle,
+		sizeof per_frame_uniform_buffer,
+		&per_frame_uniform_buffer
+	);
+
+	// this has data of current positions etc, apply every frame. not super big
+	*renderer.voxel_object_count = int4(16, 0, 0, 0);
+	// renderer.voxel_object_data[0] = get_gpu_data(renderer.island_1);
+	renderer.voxel_object_data[0].data_start 		= int4(renderer.island_1.map.data_start, 0, 0, 0);
+	renderer.voxel_object_data[0].offset_in_voxels 	= int4(renderer.island_1.position_VS,0);
+	renderer.voxel_object_data[0].size_in_chunks 	= int4(renderer.island_1.map.size_in_chunks, 0);
+
+	renderer.voxel_object_data[1].data_start 		= int4(renderer.island_2.map.data_start, 0, 0, 0);
+	renderer.voxel_object_data[1].offset_in_voxels 	= int4(renderer.island_2.position_VS,0);
+	renderer.voxel_object_data[1].size_in_chunks 	= int4(renderer.island_2.map.size_in_chunks, 0);
+
+	renderer.voxel_object_data[2].data_start 		= int4(renderer.player_voxel_object.map.data_start, 0, 0, 0);
+	renderer.voxel_object_data[2].offset_in_voxels 	= int4(renderer.player_voxel_object.position_VS, 0);
+	renderer.voxel_object_data[2].size_in_chunks 	= int4(renderer.player_voxel_object.map.size_in_chunks, 0);		
+
+	renderer.voxel_object_data[3].data_start 		= int4(renderer.npc_voxel_object.map.data_start, 0, 0, 0);
+	renderer.voxel_object_data[3].offset_in_voxels 	= int4(renderer.npc_voxel_object.position_VS, 0);
+	renderer.voxel_object_data[3].size_in_chunks 	= int4(renderer.npc_voxel_object.map.size_in_chunks, 0);		
+
+	renderer.voxel_object_data[4].data_start 		= int4(renderer.grass_voxel_object.map.data_start, 0, 0, 0);
+	renderer.voxel_object_data[4].offset_in_voxels 	= int4(renderer.grass_voxel_object.position_VS, 0);
+	renderer.voxel_object_data[4].size_in_chunks 	= int4(renderer.grass_voxel_object.map.size_in_chunks, 0);		
+
+	renderer.voxel_object_data[5].data_start 		= int4(renderer.rats_voxel_object.map.data_start, 0, 0, 0);
+	renderer.voxel_object_data[5].offset_in_voxels 	= int4(renderer.rats_voxel_object.position_VS, 0);
+	renderer.voxel_object_data[5].size_in_chunks 	= int4(renderer.rats_voxel_object.map.size_in_chunks, 0);		
+
+	int cloud_index_offset = 6;
+	for (int i = 0; i < renderer.cloud_count; i++)
+	{
+		renderer.voxel_object_data[i + cloud_index_offset].data_start 		= int4(renderer.clouds[i].map.data_start, 0, 0, 0);
+		renderer.voxel_object_data[i + cloud_index_offset].offset_in_voxels = int4(renderer.clouds[i].position_VS, 0);
+		renderer.voxel_object_data[i + cloud_index_offset].size_in_chunks 	= int4(renderer.clouds[i].map.size_in_chunks, 0);		
+	}
+
+	size_t object_buffer_update_size = 16 * sizeof(VoxelObjectGpuData);
+	graphics_buffer_apply(renderer.graphics, renderer.voxel_object_buffer_handle, 0, sizeof(int4) + object_buffer_update_size, true);	
+}
 
 namespace gui
 {
@@ -231,10 +267,9 @@ void init(VoxelRenderer & renderer, DrawOptions * draw_options, Graphics * graph
 	// -----------------------------------------------------------------
 
 	GraphicsBufferType buffer_types[per_frame_buffer_count];
-	buffer_types[voxel_object_buffer] 	= GraphicsBufferType::storage;
-	buffer_types[voxel_data_buffer] 	= GraphicsBufferType::storage;
-	buffer_types[voxel_info_buffer] 	= GraphicsBufferType::uniform;
-	buffer_types[camera_buffer] 		= GraphicsBufferType::uniform;
+	buffer_types[voxel_object_buffer] 		= GraphicsBufferType::storage;
+	buffer_types[voxel_data_buffer] 		= GraphicsBufferType::storage;
+	buffer_types[per_frame_uniform_buffer] 	= GraphicsBufferType::uniform;
 
 	GraphicsPipelineLayout layout = {};
 	layout.per_frame_buffer_count = per_frame_buffer_count;
@@ -247,12 +282,11 @@ void init(VoxelRenderer & renderer, DrawOptions * draw_options, Graphics * graph
 
 	// These are fixed size
 	// handles are references to buffers on graphics
-	renderer.voxel_info_buffer_handle = graphics_create_buffer(graphics, sizeof(VoxelWorldInfo), GraphicsBufferType::uniform);
+	// renderer.voxel_info_buffer_handle = graphics_create_buffer(graphics, sizeof(VoxelSettingsGpuData), GraphicsBufferType::uniform);
 	renderer.per_frame_uniform_buffer_handle = graphics_create_buffer(graphics, sizeof(PerFrameUniformBuffer), GraphicsBufferType::uniform);
 
 	// non handles are integers that match the compute pipeline layout
-	graphics_bind_buffer(graphics, renderer.voxel_info_buffer_handle, voxel_info_buffer);
-	graphics_bind_buffer(graphics, renderer.per_frame_uniform_buffer_handle, camera_buffer);
+	graphics_bind_buffer(graphics, renderer.per_frame_uniform_buffer_handle, per_frame_uniform_buffer);
 
 	renderer.voxel_data_buffer_capacity = 256 * 256 * 256;
 	renderer.voxel_data_buffer_handle = graphics_create_buffer(
@@ -290,7 +324,7 @@ void reset_allocations(VoxelRenderer & renderer)
 }
 
 // Call prepare_frame always once per frame before drawing dynamic objects
-void prepare_frame(VoxelRenderer & renderer, Allocator & temp_allocator)
+void prepare_frame(VoxelRenderer & renderer, Allocator&)
 {
 	// copy_slice_data(renderer.island_1_chunk_map.nodes, renderer.chunk_map.nodes);
 	// clear_slice_data(renderer.player_chunk_map.nodes);
@@ -349,24 +383,6 @@ void draw_cuboid(
 	}
 }
 
-void update_position(
-	VoxelRenderer const & renderer,
-	float3 position_WS,
-	float size,
-	VoxelObject & target
-)
-{	
-	float WS_to_VS = renderer.draw_options->voxel_settings.WS_to_VS();
-
-	float3 size_WS 		= float3(size, 2 * size, size);
-	int3 size_VS 		= max(int3(size_WS * WS_to_VS), 1); // Always draw at least one voxel, for now at least, for debug
-
-	float3 offset_OS 	= float3(-size_WS.x / 2, 0, -size_WS.z / 2);
-	float3 start_WS 	= position_WS + offset_OS;
-	int3 start_VS 		= int3(floor(start_WS * WS_to_VS));
-
-	target.position_VS = start_VS;
-}
 
 bool test_AABB_against_voxels(
 	float3 bounds_min, 
