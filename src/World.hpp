@@ -162,13 +162,19 @@ float get_height(World const & world, float3 world_position)
 }
 
 
-bool get_closest_height_below_position(World const & world, float3 position, float * out_height)
+bool get_closest_height_below_position(
+	World const & 	world,
+	float3 			position, 
+	float3 			min_bound,	
+	float3 			max_bound,	
+	float * 		out_height
+)
 {	
 	bool ok = false;
 	float result = -100000;
 
-	float3 bounds_min = position + float3(-0.5, 0, -0.5);
-	float3 bounds_max = position + float3(0.5, 2, 0.5);
+	float3 bounds_min = position + min_bound;
+	float3 bounds_max = position + max_bound;
 
 	float3 island_1_min = world.settings->island_1_position;
 	float3 island_1_max = world.settings->island_1_position + world.settings->island_1_size;

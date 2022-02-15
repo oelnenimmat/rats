@@ -187,6 +187,8 @@ struct CharacterUpdateJob
 		bool above_walkable_terrain = get_closest_height_below_position(
 			*world, 
 			move_end_position + float3(0, 0.5, 0),
+			float3(-0.5, 0, -0.5),
+			float3(0.5, 2, 0.5),
 			&walkable_terrain_height
 		);
 

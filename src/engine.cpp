@@ -154,7 +154,7 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 	init(engine.grass, &engine.grass_settings, &global_debug_allocator, &engine.debug_terrain);
  	init(engine.world, &engine.world_settings, &engine.debug_terrain);
  	init(engine.clouds, &engine.cloud_settings);
- 	init(engine.rats, engine.persistent_allocator);
+ 	init(engine.rats, engine.renderer, engine.persistent_allocator);
 
 	// todo: make mouse system, and init it
 	for (int i = 0; i < array_length(engine.mouses); i++)
@@ -179,7 +179,6 @@ void update_engine(Engine & engine)
 	{
 		int3 chunks_in_character 	= int3(1,2,1);
 		int3 chunks_for_grass 		= int3(4,4,4);
-		int3 chunks_for_rats 		= int3(8,2,8);
 
 		engine.renderer.island_1.map.dispose();
 		engine.renderer.island_2.map.dispose();
@@ -233,6 +232,8 @@ void update_engine(Engine & engine)
 
 		/// this needs to be allocated also, even though we don't write any data yet
 		allocate_chunks(engine.renderer, chunks_for_grass, engine.renderer.grass_voxel_object);
+		
+		int3 chunks_for_rats = int3(floor(engine.rats.settings.world_max - engine.rats.settings.world_min) + 1);
 		allocate_chunks(engine.renderer, chunks_for_rats, engine.renderer.rats_voxel_object);
 
 		// --------------------------------------------------------------------
@@ -350,21 +351,25 @@ void update_engine(Engine & engine)
 	};
 	jobs.enqueue(character_update_job, character_count);
 
-	auto mouse_update_job = MouseUpdateJob
-	{
-		.mouses 		= engine.mouses,
-		.terrain 		= &engine.debug_terrain,
-		.delta_time 	= scaled_delta_time,
-		.min_position 	= float3(0.5, 0.5, 0.5),
-		.max_position 	= float3(
-			engine.world_settings.world_size - 0.5f,
-			engine.world_settings.world_size - 0.5f,
-			engine.world_settings.world_size - 0.5f
-		)
-	};
+	// auto mouse_update_job = MouseUpdateJob
+	// {
+	// 	.mouses 		= engine.mouses,
+	// 	.terrain 		= &engine.debug_terrain,
+	// 	.delta_time 	= scaled_delta_time,
+	// 	.min_position 	= float3(0.5, 0.5, 0.5),
+	// 	.max_position 	= float3(
+	// 		engine.world_settings.world_size - 0.5f,
+	// 		engine.world_settings.world_size - 0.5f,
+	// 		engine.world_settings.world_size - 0.5f
+	// 	)
+	// };
 
-	jobs.enqueue_parallel(mouse_update_job, array_length(engine.mouses));
-	jobs.enqueue_parallel(get_grass_update_job(engine.grass, scaled_delta_time), engine.grass.roots_WS.length());
+	// jobs.enqueue_parallel(mouse_update_job, array_length(engine.mouses));
+	run_job_parallel(
+		get_grass_update_job(engine.grass, scaled_delta_time),
+		engine.grass.roots_WS.length()
+	);
+	// jobs.enqueue_parallel(get_grass_update_job(engine.grass, scaled_delta_time), engine.grass.roots_WS.length());
 
 	// Jobs are just discarded if we are paused. Ofc they shouln't be created, but we are still
 	// experimenting so this is okay
@@ -374,6 +379,12 @@ void update_engine(Engine & engine)
 		jobs.wait();
 
 		update_clouds(engine.clouds, engine.clock.scaled_delta_time);
+		update_rats(
+			engine.rats,
+			engine.world,
+			engine.character.position,
+			engine.clock.scaled_delta_time
+		);
 	}
 
 	// These need to be stored back, since we use them as values here, not pointers

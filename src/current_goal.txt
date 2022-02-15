@@ -2,6 +2,26 @@ Current goal
 
 rats
 
+- reallocate rats runtime
+
+- fall
+- avoid other rats at a distance/ give space
+- nature and urban environment
+	- dodgy in nature
+	- aggressive in urban
+
+	- second terrain generation type
+- spawn from somewhere
+- eat soft terrain
+
+player can die
+
+reset island
+	reset on start and on death
+
+bridges
+
+- render grass and rats with same dynamic chunks
 
 
 

@@ -7,10 +7,8 @@ struct VoxelSettings
 	// resolutiom and not the other way around. Unintuitiviness may also be because now (4.2.2022)
 	// chunks_in_world is a thing here, and increasing the rate of chunkspace but not actually
 	// the number of chunks leads to world/canvas area to actually shrink.
-	float chunks_in_unit 	= 16.0f / 20.0f; // chunks_per_unit
+	float chunks_in_unit 	= 16.0f / 20.0f;
 	int voxels_in_chunk 	= 8;
-
-	// int3 chunks_in_world 	= int3(16,16,16);
 
 	// Design choice: for now voxels are always cubes. May change.
 
@@ -20,23 +18,13 @@ struct VoxelSettings
 	float CS_to_WS() const { return 1.0f / chunks_in_unit; }
 	float WS_to_CS() const { return chunks_in_unit; }
 
-	float VS_to_WS() const { return 1.0f / (voxels_in_chunk * chunks_in_unit); } //return VS_to_CS() * CS_to_WS(); }
-	float WS_to_VS() const { return chunks_in_unit * voxels_in_chunk; } //return WS_to_CS() * CS_to_VS(); }
-
-	// int total_chunk_count()
-	// {
-	// 	return chunks_in_world.x * chunks_in_world.y * chunks_in_world.z;
-	// }
+	float VS_to_WS() const { return 1.0f / (voxels_in_chunk * chunks_in_unit); }
+	float WS_to_VS() const { return chunks_in_unit * voxels_in_chunk; }
 
 	int total_voxel_count_in_chunk()
 	{
 		return voxels_in_chunk * voxels_in_chunk * voxels_in_chunk;
 	}
-
-	// int total_voxel_count_in_world()
-	// {
-	// 	return total_chunk_count() * total_voxel_count_in_chunk();
-	// }
 };
 
 
@@ -44,14 +32,12 @@ inline SERIALIZE_STRUCT(VoxelSettings const & voxel_settings)
 {
 	serializer.write("chunks_in_unit", voxel_settings.chunks_in_unit);
 	serializer.write("voxels_in_chunk", voxel_settings.voxels_in_chunk);
-	// serializer.write("chunks_in_world", voxel_settings.chunks_in_world);
 }
 
 inline DESERIALIZE_STRUCT(VoxelSettings & voxel_settings)
 {
 	serializer.read("chunks_in_unit", voxel_settings.chunks_in_unit);
 	serializer.read("voxels_in_chunk", voxel_settings.voxels_in_chunk);
-	// serializer.read("chunks_in_world", voxel_settings.chunks_in_world);
 }
 
 namespace gui
@@ -60,7 +46,6 @@ namespace gui
 	{
 		auto gui = gui_helper();
 		gui.edit("chunks_in_unit", voxel_settings.chunks_in_unit);
-		// gui.edit("chunks_in_world", voxel_settings.chunks_in_world);
 		gui.edit("voxels_in_chunk", voxel_settings.voxels_in_chunk);
 		
 		// Indent();

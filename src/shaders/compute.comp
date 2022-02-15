@@ -12,7 +12,6 @@ layout(set = 0, binding = 0, rgba8) uniform writeonly image2D result_image;
 
 #define PER_FRAME_VOXEL_OBJECTS 0
 #define PER_FRAME_VOXEL_DATA 1
-// #define PER_FRAME_VOXEL_INFO 2
 #define PER_FRAME_UNIFORM 2
 
 #define DRAW_MODE_LIT 0
@@ -31,9 +30,6 @@ struct CameraData
 {
 	mat4 view;
 	vec4 max_distance_X_field_of_view_Y;
-
-	// vec4 render_bounds_min;
-	// vec4 render_bounds_max;
 };
 
 struct DrawOptions
@@ -101,16 +97,6 @@ float get_normal_offset()
 {
 	return per_frame.draw_options.debug_options.z;
 }
-
-// vec3 get_render_bounds_min()
-// {
-// 	return per_frame.camera_data.render_bounds_min.xyz;
-// }
-
-// vec3 get_render_bounds_max()
-// {
-// 	return per_frame.camera_data.render_bounds_max.xyz;
-// }
 
 int get_draw_mode()
 {
