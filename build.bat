@@ -8,7 +8,7 @@ src/*.cpp prebuild.o ^
 -fopenmp ^
 -O0 ^
 -D_CRT_SECURE_NO_WARNINGS ^
--Werror -Wshadow ^
+-Werror -Wshadow -Wextra -Wno-unused-parameter -Wno-sign-compare ^
 -Iinclude ^
 -I%VULKAN_SDK%/Include ^
 -lUser32 -lwinmm ^

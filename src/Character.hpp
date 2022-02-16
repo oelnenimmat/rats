@@ -203,13 +203,10 @@ struct CharacterUpdateJob
 		
 		// todo: if we moved more than some threshold in frame, check multiple spots alog path to see if went through some objects
 
-		if (above_walkable_terrain)
+		if (above_walkable_terrain && (character.y_position < walkable_terrain_height))
 		{
-			if (character.y_position < walkable_terrain_height)
-			{
-				character.y_position = walkable_terrain_height;
-				character.y_velocity = 0;
-			}
+			character.y_position = walkable_terrain_height;
+			character.y_velocity = 0;
 		}
 
 		character.position.y = character.y_position;

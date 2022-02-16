@@ -4,38 +4,18 @@ template<typename T>
 struct ChunkMap
 {
 	int voxel_count_in_chunk;
-
-	// this lets this be used with owned and loaned memory. all accesses are always done to slice, and 
-	// if this owns memory, it is in array
-	Array<T> memory;
 	Slice<T> nodes;
 
 	// this is for voxel renderer
 	size_t data_start;
-	// int3 offset_in_voxels; // voxel space
 	int3 size_in_chunks; // chunk space
 
 
 	void dispose()
 	{
-		memory.dispose();
 		nodes.dispose();
 	}
 };
-
-template<typename T>
-void init (ChunkMap<T> & map, Allocator & allocator, int3 size_in_chunks, int voxel_count_in_chunk)
-{
-	map.size_in_chunks = size_in_chunks;
-	map.voxel_count_in_chunk = voxel_count_in_chunk;
-
-	int total_size_in_chunks = size_in_chunks.x * size_in_chunks.y * size_in_chunks.z;
-	int total_voxel_count = total_size_in_chunks * voxel_count_in_chunk * voxel_count_in_chunk * voxel_count_in_chunk;
-	int total_element_count = total_size_in_chunks + total_voxel_count;
-
-	map.memory = Array<T>(total_element_count, allocator, AllocationType::zero_memory);
-	map.nodes = make_slice<T>(map.memory.length(), map.memory.get_memory_ptr());
-}
 
 template<typename T>
 void init (ChunkMap<T> & map, T * memory, int3 size_in_chunks, int voxel_count_in_chunk)
@@ -67,7 +47,6 @@ T & get_node(ChunkMap<T> & map, int x, int y, int z)
 		return garbage_value<T>;
 	}	
 
-
 	// todo: use separate slice for chunks and voxels
 	int size_in_chunks_3d = map.size_in_chunks.x * map.size_in_chunks.y * map.size_in_chunks.z;
 	int nodes_start = size_in_chunks_3d;
@@ -80,12 +59,9 @@ T & get_node(ChunkMap<T> & map, int x, int y, int z)
 	// todo:we dont want this if we are only reading
 	map.nodes[chunk_offset].has_children() = 1;
 
-
-	int3 voxel = xyz % map.voxel_count_in_chunk;
-
-	int voxel_offset = voxel.x + voxel.y * map.voxel_count_in_chunk + voxel.z * map.voxel_count_in_chunk * map.voxel_count_in_chunk;
-
-	int index = nodes_start + chunk_offset * map.voxel_count_in_chunk * map.voxel_count_in_chunk * map.voxel_count_in_chunk + voxel_offset;
+	int3 voxel 			= xyz % map.voxel_count_in_chunk;
+	int voxel_offset 	= voxel.x + voxel.y * map.voxel_count_in_chunk + voxel.z * map.voxel_count_in_chunk * map.voxel_count_in_chunk;
+	int index 			= nodes_start + chunk_offset * map.voxel_count_in_chunk * map.voxel_count_in_chunk * map.voxel_count_in_chunk + voxel_offset;
 
 	return map.nodes[index];
 };

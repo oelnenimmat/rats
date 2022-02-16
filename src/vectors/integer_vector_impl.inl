@@ -1,3 +1,14 @@
+
+inline bool operator == (VECTOR const & a, VECTOR const & b)
+{
+	bool same = true;
+	for (int i = 0; i < DIMENSION; i++)
+	{
+		same = same && (a.values[i] == b.values[i]);
+	}
+	return same;
+}
+
 inline VECTOR & operator %= (VECTOR & v, int s)
 {
 	for (int i = 0; i < DIMENSION; i++)

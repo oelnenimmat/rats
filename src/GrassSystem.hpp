@@ -1,4 +1,13 @@
+/*
+todo:
+Grass density from noise etc. map
+specify threshold where grass gets drawn
+	grass at the edge (i.e. more than threshold, but not much) are messier and
+	are tilted a little towards the gradient
+*/
+
 #pragma once
+
 
 #include "memory.hpp"
 #include "meta_info.hpp"
@@ -115,16 +124,6 @@ struct GrassSystem
 	bool created = false;
 	Array<float3> roots_WS = {};
 	Array<float3> tips_LS = {};
-
-
-	// ~GrassSystem()
-	// {
-	// 	if (created)
-	// 	{
-	// 		roots_WS.dispose();
-	// 		tips_LS.dispose();
-	// 	}
-	// }
 };
 
 struct GrassUpdateJob
@@ -157,8 +156,8 @@ GrassUpdateJob get_grass_update_job(GrassSystem & grass, float delta_time)
 	grass.wind_noise_offset += grass.settings->wind_noise_move_speed * delta_time;
 
 	GrassUpdateJob job 		= {};
-	job.roots_WS 				= make_slice(grass.roots_WS, 0, grass.roots_WS.length());
-	job.tips_LS 				= make_slice(grass.tips_LS, 0, grass.tips_LS.length());
+	job.roots_WS 			= make_slice(grass.roots_WS, 0, grass.roots_WS.length());
+	job.tips_LS 			= make_slice(grass.tips_LS, 0, grass.tips_LS.length());
 	job.wind_strength 		= grass.settings->wind_strength;
 	job.wind_noise_offset 	= grass.wind_noise_offset;
 	job.wind_noise 			= make_noise(grass.settings->wind_noise_settings);
@@ -238,7 +237,8 @@ void draw_grass(
 	GrassSystem const & grass,
 	VoxelRenderer & renderer,
 	float3 world_size,
-	int3 offset_VS
+	int3 offset_VS,
+	float3 density_center
 )
 {
 	clear_slice_data(renderer.grass_voxel_object.map.nodes);
@@ -265,6 +265,12 @@ void draw_grass(
 	for (int i = 0; i < grass.roots_WS.length(); i++)
 	{
 		float3 root = grass.roots_WS[i];
+		if (length(root - density_center) > 4)
+		{
+			continue;
+		}
+
+
 		float3 tip = grass.tips_LS[i];
 
 		root -= range_start_WS;
@@ -302,12 +308,9 @@ void draw_grass(
 			int x = floor(tx);
 			int z = floor(tz);
 
-			auto & node = get_node(
-				renderer.grass_voxel_object.map,
-				x + start_VS.x,
-				y + start_VS.y,
-				z + start_VS.z
-			);
+			// auto & node = get_dynamic_map_voxel(renderer, int3(x + start_VS.x, y + start_VS.y, z + start_VS.z));
+			auto & node = get_node(renderer.grass_voxel_object.map, x + start_VS.x, y + start_VS.y, z + start_VS.z);
+
 			node.material() = 2;
 			node.normal() = normal;
 			node.color = color;

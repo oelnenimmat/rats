@@ -93,9 +93,90 @@ void run_engine(Window * window, Graphics * graphics, Input * input)
 			window_sleep(engine.window, 100);
 		}
 		TIME_FUNCTION(end_frame(engine), engine.timings.end_frame);
+
+		engine.debug.first_frame = false;
 	}
 
 	shutdown_engine(engine);
+}
+
+void engine_recreate_world(Engine & engine)
+{
+	reset_allocations(engine.renderer);
+	
+	engine.renderer.island_1.map.dispose();
+	generate_test_world(
+		engine.renderer.island_1,
+		engine.debug_terrain,
+		engine.noise_settings,
+		engine.world_settings,
+		engine.draw_options.voxel_settings,
+		0,
+		engine.renderer,
+		&engine.world_generation_progress
+	);
+
+	engine.renderer.island_2.map.dispose();
+	generate_test_world(
+		engine.renderer.island_2,
+		engine.debug_terrain,
+		engine.noise_settings,
+		engine.world_settings,
+		engine.draw_options.voxel_settings,
+		1,
+		engine.renderer,
+		&engine.world_generation_progress
+	);
+
+	int3 chunks_in_character 	= int3(1,2,1);
+	engine.renderer.player_voxel_object.map.dispose();
+	engine.renderer.player_voxel_object = allocate_voxel_object(engine.renderer, chunks_in_character);
+	TIME_FUNCTION(
+		draw_cuboid(
+			engine.renderer,
+			engine.character.size,
+			engine.character.color,
+			engine.renderer.player_voxel_object
+		),
+		engine.timings.draw_character
+	);
+
+	engine.renderer.npc_voxel_object.map.dispose();
+	engine.renderer.npc_voxel_object = allocate_voxel_object(engine.renderer, chunks_in_character);
+	draw_cuboid(
+		engine.renderer,
+		engine.debug_character.size,
+		engine.debug_character.color,
+		engine.renderer.npc_voxel_object
+	);
+
+	/// this needs to be allocated also, even though we don't write any data yet
+	int3 chunks_for_grass = int3(4,4,4);
+	engine.renderer.grass_voxel_object.map.dispose();
+	engine.renderer.grass_voxel_object = allocate_voxel_object(engine.renderer, chunks_for_grass);
+
+	int3 chunks_for_rats = int3(16,4,16);
+	engine.rats.renderer.voxel_object.map.dispose();
+	engine.rats.renderer.voxel_object = allocate_voxel_object(engine.renderer, chunks_for_rats);
+
+	engine.rats_2.renderer.voxel_object.map.dispose();
+	engine.rats_2.renderer.voxel_object = allocate_voxel_object(engine.renderer, chunks_for_rats);
+
+	// --------------------------------------------------------------------
+
+	int3 chunks_for_clouds = int3(5,2,3);
+
+	static_assert(Clouds::count == VoxelRenderer::cloud_count, "");
+
+	for (int i = 0; i < Clouds::count; i++)
+	{
+		engine.renderer.clouds[i] = allocate_voxel_object(engine.renderer, chunks_for_clouds);
+		generate_clouds(
+			engine.renderer.clouds[i],
+			engine.draw_options.voxel_settings,
+			float3(chunks_for_clouds) * engine.renderer.draw_options->voxel_settings.CS_to_WS()
+		);
+	}
 }
 
 void initialize_engine(Engine & engine, Graphics * graphics, Window * window, Input * input)
@@ -147,14 +228,15 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 
 	// These init functions are maybe nice,but should they be named separately, like init_renderer
 	// Engine systems?
-	init(engine.renderer, &engine.draw_options, graphics);
+	init(engine.renderer, &engine.draw_options, graphics, &engine.persistent_allocator);
 
 	// Game systems?
 	init(engine.debug_terrain, &engine.debug_terrain_settings);
 	init(engine.grass, &engine.grass_settings, &global_debug_allocator, &engine.debug_terrain);
  	init(engine.world, &engine.world_settings, &engine.debug_terrain);
  	init(engine.clouds, &engine.cloud_settings);
- 	init(engine.rats, engine.renderer, engine.persistent_allocator);
+ 	init(engine.rats, engine.persistent_allocator);
+ 	init(engine.rats_2, engine.persistent_allocator);
 
 	// todo: make mouse system, and init it
 	for (int i = 0; i < array_length(engine.mouses); i++)
@@ -164,7 +246,7 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 
 	// -----------------------------------------------------------------
 
-	engine.events.recreate_world = true;
+	engine_recreate_world(engine);
 }
 
 void update_engine(Engine & engine)
@@ -177,91 +259,30 @@ void update_engine(Engine & engine)
 
 	if (engine.events.recreate_world)
 	{
-		int3 chunks_in_character 	= int3(1,2,1);
-		int3 chunks_for_grass 		= int3(4,4,4);
-
-		engine.renderer.island_1.map.dispose();
-		engine.renderer.island_2.map.dispose();
-		engine.renderer.player_voxel_object.map.dispose();
-		engine.renderer.npc_voxel_object.map.dispose();
-		engine.renderer.grass_voxel_object.map.dispose();
-		engine.renderer.rats_voxel_object.map.dispose();
-		reset_allocations(engine.renderer);
-		
-		// generate_test_world_in_thread(
-		generate_test_world(
-			engine.renderer.island_1,
-			engine.debug_terrain,
-			engine.noise_settings,
-			engine.world_settings,
-			engine.draw_options.voxel_settings,
-			0,
-			engine.renderer,
-			&engine.world_generation_progress
-		);
-
-		generate_test_world(
-			engine.renderer.island_2,
-			engine.debug_terrain,
-			engine.noise_settings,
-			engine.world_settings,
-			engine.draw_options.voxel_settings,
-			1,
-			engine.renderer,
-			&engine.world_generation_progress
-		);
-
-		allocate_chunks(engine.renderer, chunks_in_character, engine.renderer.player_voxel_object);
-		TIME_FUNCTION(
-			draw_cuboid(
-				engine.renderer,
-				engine.character.size,
-				engine.character.color,
-				engine.renderer.player_voxel_object
-			),
-			engine.timings.draw_character
-		);
-	
-		allocate_chunks(engine.renderer, chunks_in_character, engine.renderer.npc_voxel_object);
-		draw_cuboid(
-			engine.renderer,
-			engine.debug_character.size,
-			engine.debug_character.color,
-			engine.renderer.npc_voxel_object
-		);
-
-		/// this needs to be allocated also, even though we don't write any data yet
-		allocate_chunks(engine.renderer, chunks_for_grass, engine.renderer.grass_voxel_object);
-		
-		int3 chunks_for_rats = int3(floor(engine.rats.settings.world_max - engine.rats.settings.world_min) + 1);
-		allocate_chunks(engine.renderer, chunks_for_rats, engine.renderer.rats_voxel_object);
-
-		// --------------------------------------------------------------------
-
-		int3 chunks_for_clouds = int3(5,2,3);
-
-		static_assert(Clouds::count == VoxelRenderer::cloud_count, "");
-
-		for (int i = 0; i < Clouds::count; i++)
-		{
-			allocate_chunks(engine.renderer, chunks_for_clouds, engine.renderer.clouds[i]);
-			generate_clouds(
-				engine.renderer.clouds[i],
-				engine.draw_options.voxel_settings,
-				float3(chunks_for_clouds) * engine.renderer.draw_options->voxel_settings.CS_to_WS()
-			);
-		}
+		engine_recreate_world(engine);
 	}
 
 	// ---------------------------------------------------------------------
 
-	if (input_key_went_down(input, InputKey::keyboard_escape))
+	if (input_key_went_down(input, InputKey::keyboard_tab))
 	{
-		// engine.editor_camera_controller.enabled = false;
-		// engine.game_camera_controller.enabled = false;
-		engine.camera_mode = CameraMode::editor;
-		window_set_cursor_visible(window, true);
+		switch(engine.camera_mode)
+		{
+			case CameraMode::editor:
+			{
+				engine.camera_mode = CameraMode::game;
+				window_set_cursor_visible(window, false);
+			} break;
+
+			case CameraMode::game:
+			{
+				engine.camera_mode = CameraMode::editor;
+				window_set_cursor_visible(window, true);
+			} break;
+		}
 	}
+
+
 
 	if (input_key_went_down(input, InputKey::keyboard_t))
 	{
@@ -379,12 +400,8 @@ void update_engine(Engine & engine)
 		jobs.wait();
 
 		update_clouds(engine.clouds, engine.clock.scaled_delta_time);
-		update_rats(
-			engine.rats,
-			engine.world,
-			engine.character.position,
-			engine.clock.scaled_delta_time
-		);
+		update_rats(engine.rats, engine.world, engine.character.position, engine.clock.scaled_delta_time);
+		update_rats(engine.rats_2, engine.world, engine.character.position, engine.clock.scaled_delta_time);
 	}
 
 	// These need to be stored back, since we use them as values here, not pointers
@@ -404,9 +421,15 @@ void update_engine(Engine & engine)
 
 void render_engine(Engine & engine)
 {
+	auto graphics = engine.graphics;
+	// This must be called before any graphics calls, so that virtual frame index is advanced properly
+	TIME_FUNCTION(
+		graphics_begin_frame(graphics),
+		engine.timings.graphics_begin_frame
+	);
+
 	VoxelRenderer & renderer = engine.renderer;
 
-	auto graphics = engine.graphics;
 
 	TIMER_BEGIN(draw_to_octree);
 
@@ -435,12 +458,7 @@ void render_engine(Engine & engine)
 				engine.grass.settings->chunk_world_position
 			);		
 
-			update_position(
-				engine.renderer.rats_voxel_object,
-				engine.renderer.draw_options->voxel_settings,
-				engine.rats.settings.world_min
-			);
-
+	
 			for (int i = 0; i < Clouds::count; i++)
 			{
 				update_position(engine.renderer.clouds[i], engine.renderer.draw_options->voxel_settings, engine.clouds.positions[i]);		
@@ -460,10 +478,17 @@ void render_engine(Engine & engine)
 			engine.grass,
 			engine.renderer,
 			world_size,
-			engine.renderer.island_1.position_VS
+			engine.renderer.island_1.position_VS,
+			engine.character.position
 		), engine.timings.draw_grass);
 
-		draw_rats(engine.rats, engine.renderer);
+		// todo: maybe somewhere between character and camera
+		// also todo: this will just do spheres, right? we should pass some info like camera position and rotation and players
+		// distance to camera and cull visibility like cone, and not sphere
+		float3 proximity_render_target = engine.character.position;
+
+		draw_rats(engine.rats, engine.renderer, proximity_render_target);
+		draw_rats(engine.rats_2, engine.renderer, proximity_render_target);
 
 	TIMER_END(engine.timings, draw_to_octree);
 
@@ -493,11 +518,41 @@ void render_engine(Engine & engine)
 			draw_wire_cube(engine.renderer, engine.rats.settings.world_min, engine.rats.settings.world_max);
 		}
 
-	// This must be called before any graphics calls, so that virtual frame index is advanced properly
-	TIME_FUNCTION(
-		graphics_begin_frame(graphics),
-		engine.timings.graphics_begin_frame
-	);
+		if (engine.rats_2.draw_bounds)
+		{
+			draw_wire_cube(engine.renderer, engine.rats_2.settings.world_min, engine.rats_2.settings.world_max);
+		}
+
+		draw_wire_cube(
+			engine.renderer,
+			engine.rats.settings.spawn_position - float3(0.2, 0, 0.2),
+			engine.rats.settings.spawn_position + float3(0.2, 0.4, 0.2)
+		);
+
+		draw_wire_cube(
+			engine.renderer,
+			engine.rats_2.settings.spawn_position - float3(0.2, 0, 0.2),
+			engine.rats_2.settings.spawn_position + float3(0.2, 0.4, 0.2)
+		);
+
+	// matt godbolt like "correct by construction" interface. accessed by object which creates all
+	// necessary stuff before begin. "push_to_graphics" could be a destructor, but that is too implicit to my taste
+	auto draw_list = get_draw_list(engine.renderer);
+
+	draw_list.add(engine.renderer.island_1);
+	draw_list.add(engine.renderer.island_2);
+	draw_list.add(engine.renderer.player_voxel_object);
+	draw_list.add(engine.renderer.npc_voxel_object);
+	draw_list.add(engine.renderer.grass_voxel_object);
+	draw_list.add(engine.rats.renderer.voxel_object);
+	draw_list.add(engine.rats_2.renderer.voxel_object);
+
+	for (int i = 0; i < renderer.cloud_count; i++)
+	{
+		draw_list.add(engine.renderer.clouds[i]);
+	}
+	
+	draw_list.push_to_graphics();
 
 	TIME_FUNCTION(
 		setup_per_frame_uniform_buffers(
@@ -513,7 +568,7 @@ void render_engine(Engine & engine)
 		// Todo(Leo): this is still problematic, since we are not synced with rendering, and this might be updated from cpu
 		// (voxel renderer) while being copied to actual gpu buffer. Now it could be fixed by setting virtual frame
 		// count to 1, but i am not sure if I want to do that yet. It might be okay though.	
-		if (engine.events.recreate_world)
+		if (engine.events.recreate_world || engine.debug.first_frame)
 		{
 			graphics_buffer_apply(
 				graphics,
@@ -571,10 +626,30 @@ void render_engine(Engine & engine)
 		graphics_buffer_apply(
 			graphics,
 			renderer.voxel_data_buffer_handle,
-			renderer.rats_voxel_object.map.data_start * sizeof(VoxelData),
-			renderer.rats_voxel_object.map.nodes.memory_size(),
+			engine.rats.renderer.voxel_object.map.data_start * sizeof(VoxelData),
+			engine.rats.renderer.voxel_object.map.nodes.memory_size(),
 			true
 		);
+
+		graphics_buffer_apply(
+			graphics,
+			renderer.voxel_data_buffer_handle,
+			engine.rats_2.renderer.voxel_object.map.data_start * sizeof(VoxelData),
+			engine.rats_2.renderer.voxel_object.map.nodes.memory_size(),
+			true
+		);
+
+		// apply dynamic objects
+		for (int i = 0; i < renderer.placed_dynamic_chunk_count; i++)
+		{
+			graphics_buffer_apply(
+				renderer.graphics,
+				renderer.voxel_data_buffer_handle,
+				renderer.dynamic_chunks[i].map.data_start * sizeof(VoxelData),
+				renderer.dynamic_chunks[i].map.nodes.memory_size(),
+				true
+			);
+		}
 
 	TIMER_END(engine.timings, copy_to_graphics);
 
@@ -704,9 +779,14 @@ void engine_gui(Engine & engine)
 	}
 	End();
 
+	static float editor_width = 320;
 	ImGui::SetNextWindowPos(ImVec2(20, 20));
+	ImGui::SetNextWindowSize(ImVec2(editor_width, window_get_height(engine.window) - 40));
 	if (ImGui::Begin("Editor"))
 	{
+
+		editor_width = GetWindowWidth();
+
 		collapsing_box("Input Settings", engine.input_settings);
 		collapsing_box("Noise Settings", engine.noise_settings);
 		collapsing_box("Camera", engine.camera);
@@ -721,6 +801,7 @@ void engine_gui(Engine & engine)
 		collapsing_box("Draw Options", engine.draw_options);
 		collapsing_box("Renderer", engine.renderer);
 		collapsing_box("Rats", engine.rats);
+		collapsing_box("Rats 2", engine.rats_2);
 
 		if (collapsing_box("Terrain", engine.debug_terrain_settings))
 		{
@@ -729,21 +810,21 @@ void engine_gui(Engine & engine)
 
 		if (Button("Recreate world"))
 		{
-			if (engine.world_generation_progress > 1)
-			{
+			// if (engine.world_generation_progress > 1)
+			// {
 				engine.events.recreate_world = true;
-			}
+			// }
 		}
 
-		if(engine.world_generation_progress < 3.0f)
-		{
-			if (engine.world_generation_progress >= 1.0f)
-			{
-				engine.world_generation_progress += engine.clock.unscaled_delta_time;
-			}
-			SameLine();
-			ProgressBar(engine.world_generation_progress, ImVec2(-1.0f, 0.0f));
-		}
+		// if(engine.world_generation_progress < 3.0f)
+		// {
+		// 	if (engine.world_generation_progress >= 1.0f)
+		// 	{
+		// 		engine.world_generation_progress += engine.clock.unscaled_delta_time;
+		// 	}
+		// 	SameLine();
+		// 	ProgressBar(engine.world_generation_progress, ImVec2(-1.0f, 0.0f));
+		// }
 
 		if (Button("Save Changes"))
 		{

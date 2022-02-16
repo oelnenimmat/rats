@@ -91,6 +91,7 @@ namespace
 		{
 			case VK_SPACE: return InputKey::keyboard_space;
 			case VK_ESCAPE: return InputKey::keyboard_escape;
+			case VK_TAB: return InputKey::keyboard_tab;
 
 			case 'A': return InputKey::keyboard_a;
 			case 'B': return InputKey::keyboard_b;

@@ -33,19 +33,17 @@ void generate_test_world(
 
 	int3 voxel_count = int3(floor(size * WS_to_VS)); // or ceil?
 
-	int voxel_count_x = voxel_count.x;
-	int voxel_count_z = voxel_count.z;
-
 	voxel_count.y = 80;
 
 	// cannot do in thread
-	allocate_chunks_by_voxels(renderer, voxel_count, target);
+	int3 chunk_count = int3(floor(float3(voxel_count) / voxel_settings.voxels_in_chunk) + 1);
+	target = allocate_voxel_object(renderer, chunk_count);
 
-	std::cout << "[WORLD]: voxel_count x: " << voxel_count_x << ", z: " << voxel_count_z <<  "\n";
+	std::cout << "[WORLD]: voxel_count x: " << voxel_count.x << ", z: " << voxel_count.z <<  "\n";
 
-	for (int z = 0; z < voxel_count_z; z++)
+	for (int z = 0; z < voxel_count.z; z++)
 	{
-		for (int x = 0; x < voxel_count_x; x++)
+		for (int x = 0; x < voxel_count.x; x++)
 		{
 			// Add 0.5 to move to center of voxel. y doesn't matter, it is set later
 			float3 world_position 		= position + float3(x + 0.5, 0,z + 0.5) * VS_to_WS;
@@ -87,7 +85,7 @@ void generate_test_world(
 						normal += float3(-1, 0, 0);
 					}
 
-					if (x == voxel_count_x - 1)
+					if (x == voxel_count.x - 1)
 					{
 						normal += float3(1,0,0);
 					}
@@ -97,7 +95,7 @@ void generate_test_world(
 						normal += float3(0,0,-1);
 					}
 
-					if (z == voxel_count_z - 1)
+					if (z == voxel_count.z - 1)
 					{
 						normal += float3(0,0,1);
 					}
@@ -134,8 +132,8 @@ void generate_test_world(
 
 			{
 				// just disregard y in here, this is accurate enough
-				float done = z * voxel_count_x +  x;
-				*progress = done / (voxel_count_x * voxel_count_z);
+				float done = z * voxel_count.x +  x;
+				*progress = done / (voxel_count.x * voxel_count.z);
 			}
 		}
 	}

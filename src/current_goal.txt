@@ -1,18 +1,45 @@
 Current goal
 
-rats
+rats:
 
+
+proximity render
+	- partition space into multichunks, allocate a amount of those and render when next to player
+		contrast with dynamic chunks (old): render where first requested, results in flickering 
+		when the first requester moves around and chunk needs to rendered elsewhere
+	- some amount of extra chunks?
+	- maybe 9x9x9 where center is normal and others are half precision
+	- all rats should render to same area, and just be clipped if they are too far
+	- later:
+		- more customized render chunk around any terrain that rats are allowed to traverse
+
+
+rats:
+- avoid edges
 - reallocate rats runtime
-
-- fall
 - avoid other rats at a distance/ give space
 - nature and urban environment
 	- dodgy in nature
 	- aggressive in urban
 
 	- second terrain generation type
-- spawn from somewhere
 - eat soft terrain
+	- when far away apprixmate terrain erosion, since rats dont need to be simulated or rendered
+- different nature on different coloured rats
+
+
+rats motivation vector?
+	- rats mostly move around
+	- accumulate motivation directions from all kinds of sources
+		- other rats
+			- heat map of all rats and just move down the gradient
+			- problem since all rats are also in their own heatmaps, and they would produce a hill on their own position. How to avoid this?
+		- player
+		- edible terrain
+		- cliffs
+		- etc
+	- just move there
+
 
 player can die
 
@@ -21,14 +48,25 @@ reset island
 
 bridges
 
-- render grass and rats with same dynamic chunks
+rats appearance:
+	- tails
+	- wobble up and down when moving
+	- head is smaller than body
+	- when moving, make horizontally long body
+	- increase resolution for rats?
+
+- lift boxes on top of rat holes to delay rattiness??
 
 
+////
 
+timings to a dictionary/hashmap thing, so that just a name as a cstring can be specified
+once in timing code
 
-
-
-
+object editing:
+	- have "generator data" aka some sort of paremeterized primitives stored
+	- when editing an object, enable primitives and render those directly
+	- when done, just bake them into single object and disable individual rendering and even unload those to disk
 
 
 

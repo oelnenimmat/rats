@@ -26,6 +26,7 @@ enum struct InputKey
 	
 	keyboard_space,
 	keyboard_escape,
+	keyboard_tab,
 
 	keyboard_a,
 	keyboard_b,

@@ -34,13 +34,6 @@ constexpr size_t array_length(_ (&)[Length])
 {
 	return Length;
 }
-/*
-// These should be cool, but there's no real use case for any of them yet
-template<typename T>
-void construct_default(T * where)
-{
-	new (where) T;
-}
 
 template<typename T>
 void swap(T & a, T & b)
@@ -49,6 +42,15 @@ void swap(T & a, T & b)
 	a = b;
 	b = temp;
 }
+
+/*
+// These should be cool, but there's no real use case for any of them yet
+template<typename T>
+void construct_default(T * where)
+{
+	new (where) T;
+}
+
 
 template <typename T>
 void value_swap(T * a, T * b)
@@ -65,7 +67,6 @@ void pointer_swap(T* & a, T* & b)
 	a = b;
 	b = temp;
 }
-*/
 template <typename T>
 void unsafe_swap(T & a, T & b)
 {
@@ -74,6 +75,7 @@ void unsafe_swap(T & a, T & b)
 	memcpy(&a, &b, sizeof(T));
 	memcpy(&b, &temp, sizeof(T));
 }
+*/
 
 template<typename TTo, typename TTFrom>
 TTo & unsafe_cast(TTFrom & from)

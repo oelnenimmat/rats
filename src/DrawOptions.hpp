@@ -94,10 +94,10 @@ enum struct ComputeShaderDrawMethod : int
 	COUNT
 };
 
-enum struct ComputShaderDrawFlags : int
+enum struct ComputShaderDrawFlags : uint32_t
 {
-	render_bounds 	= 1,
-	wire_cubes 		= 2,
+	render_bounds 	= 1u,
+	wire_cubes 		= 2u,
 
 	ALL = render_bounds | wire_cubes
 };
@@ -134,7 +134,7 @@ namespace gui
 		constexpr char const * c_strings [] = {	"render_bounds", "wire_cubes" };
 		return edit_enum_flags(
 			label,
-			reinterpret_cast<int*>(&f),
+			reinterpret_cast<uint32_t*>(&f),
 			(int)ComputShaderDrawFlags::ALL,
 			c_strings,
 			array_length(c_strings)

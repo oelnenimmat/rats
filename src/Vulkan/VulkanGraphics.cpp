@@ -289,7 +289,7 @@ void destroy_graphics(Graphics * context, Allocator * allocator)
 {
 	vkDeviceWaitIdle(context->device);
 
-	context->per_frame_buffer_pool.for_each([](ComputeBuffer & buffer)
+	context->per_frame_buffer_pool.for_each([](ComputeBuffer & buffer)	
 	{
 		if(buffer.created)
 		{
@@ -297,6 +297,8 @@ void destroy_graphics(Graphics * context, Allocator * allocator)
 			buffer.destroy();
 		}
 	});
+	context->per_frame_buffer_pool.dispose();
+	
 
 	destroy_compute_pipeline(context);
 
@@ -317,10 +319,12 @@ void destroy_graphics(Graphics * context, Allocator * allocator)
 
 	vulkan_destroy_instance(context);
 	
+
 	std::cout << "[VULKAN]: Cleared\n";
 
+
 	allocator->deallocate(context);
-	memset(context, 0, sizeof *context);
+
 
 	std::cout << "[VULKAN]: Destroyed\n";
 }

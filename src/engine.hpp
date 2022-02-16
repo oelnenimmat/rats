@@ -76,7 +76,9 @@ struct Engine
 	// Game Systems??
 	GrassSystem grass 	= {};
 	Clouds clouds 		= {};
+
 	RatSystem rats 		= {};
+	RatSystem rats_2 	= {};
 
 	DebugTerrain debug_terrain = {};
 
@@ -102,6 +104,7 @@ struct Engine
 	struct
 	{
 		bool collision;
+		bool first_frame = true;
 	} debug;
 };
 
@@ -122,6 +125,7 @@ inline SERIALIZE_STRUCT(Engine const & engine)
 	serializer.write("draw_options", engine.draw_options);
 	serializer.write("debug_terrain_settings", engine.debug_terrain_settings);
 	serializer.write("rat_settings", engine.rats.settings);
+	serializer.write("rat_settings_2", engine.rats_2.settings);
 }
 
 inline DESERIALIZE_STRUCT(Engine & engine)
@@ -141,4 +145,5 @@ inline DESERIALIZE_STRUCT(Engine & engine)
 	serializer.read("draw_options", engine.draw_options);
 	serializer.read("debug_terrain_settings", engine.debug_terrain_settings);
 	serializer.read("rat_settings", engine.rats.settings);
+	serializer.read("rat_settings_2", engine.rats_2.settings);
 }

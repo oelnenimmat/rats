@@ -71,6 +71,12 @@ struct Pool
 		}
 	}
 
+	void dispose()
+	{
+		first_free = 0;
+		elements.dispose();
+	}
+
 private:
 	enum
 	{

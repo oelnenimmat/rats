@@ -2,7 +2,8 @@ namespace
 {
 	VkDescriptorSetAllocateInfo vk_descriptor_set_allocate_info(VkDescriptorPool pool, int count, VkDescriptorSetLayout * layouts)
 	{
-		VkDescriptorSetAllocateInfo info = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+		VkDescriptorSetAllocateInfo info = {};
+		info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 		info.pNext = nullptr;
 		info.descriptorPool = pool;
 		info.descriptorSetCount = count;
@@ -15,7 +16,8 @@ namespace
 
 	VkWriteDescriptorSet vk_write_descriptor_set (VkDescriptorSet set, uint32_t binding, VkDescriptorType type, VkDescriptorImageInfo * image_info)
 	{
-		VkWriteDescriptorSet writing = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+		VkWriteDescriptorSet writing = {};
+		writing.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		writing.dstSet = set;
 		writing.dstBinding = binding;
 		writing.dstArrayElement = 0;
@@ -30,7 +32,8 @@ namespace
 
 	VkWriteDescriptorSet vk_write_descriptor_set (VkDescriptorSet set, uint32_t binding, VkDescriptorType type, VkDescriptorBufferInfo * buffer_info)
 	{
-		VkWriteDescriptorSet writing = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+		VkWriteDescriptorSet writing = {};
+		writing.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		writing.dstSet = set;
 		writing.dstBinding = binding;
 		writing.dstArrayElement = 0;
@@ -47,7 +50,8 @@ namespace
 
 	VkDescriptorSetLayoutCreateInfo vk_descriptor_set_layout_create_info(uint32_t binding_count, VkDescriptorSetLayoutBinding * bindings)
 	{
-		VkDescriptorSetLayoutCreateInfo info = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+		VkDescriptorSetLayoutCreateInfo info = {};
+		info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		info.pNext = nullptr;
 		info.flags = 0;
 		info.bindingCount = binding_count;

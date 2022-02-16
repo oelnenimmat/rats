@@ -166,7 +166,7 @@ namespace gui
 		return DragFloat4(label, &f, 0.01f);
 	}
 
-	inline bool edit_enum_flags(char const * label, int * value, int all_set_value, char const * const names[], int count)
+	inline bool edit_enum_flags(char const * label, uint32_t * value, uint32_t all_set_value, char const * const names[], int count)
 	{
 		/*
 		// https://stackoverflow.com/questions/109023/how-to-count-the-number-of-set-bits-in-a-32-bit-integer
@@ -181,7 +181,7 @@ namespace gui
 		}
 		*/
 		
-		int original_value = *value;
+		uint32_t original_value = *value;
 
 		bool none_set = *value == 0;
 		bool all_set = *value == all_set_value;

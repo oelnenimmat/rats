@@ -103,7 +103,7 @@ void update_position(
 	float3 const &			position_WS
 )
 {	
-	target.position_VS = int3(floor(position_WS * voxel_settings.WS_to_VS()));;
+	target.position_VS = int3(floor(position_WS * voxel_settings.WS_to_VS()));
 }
 
 VoxelObjectGpuData get_gpu_data(VoxelObject const & v)
@@ -115,6 +115,12 @@ VoxelObjectGpuData get_gpu_data(VoxelObject const & v)
 	return d;
 }
 
+struct DynamicChunk
+{
+	ChunkMap<VoxelData> map;
+	int3 big_grid_chunk_position;
+};
+
 struct VoxelRenderer
 {
 	VoxelObject island_1;
@@ -124,17 +130,22 @@ struct VoxelRenderer
 	VoxelObject npc_voxel_object;
 
 	VoxelObject grass_voxel_object;
-	VoxelObject rats_voxel_object;
+	// VoxelObject rats_voxel_object;
+	// VoxelObject rats_2_voxel_object;
 
 	static constexpr int cloud_count = 10;
 	VoxelObject clouds [cloud_count];
 
+
 	Graphics * graphics;
 	DrawOptions * draw_options;
+
+	int render_count_this_frame;
 
 	// Seems suspiciously like an arena allocator
 	// Also seems suspiciosly like overengineered overhead over vulkan stuff
 	// todo: make use graphics "internals" i.e. vulkan graphics directly
+	// maybe these could be by chunks
 	size_t 		voxel_data_buffer_capacity;
 	size_t 		voxel_data_buffer_used;
 	VoxelData * voxel_data_buffer_memory; // "owned", as in loaned from graphics
@@ -149,7 +160,55 @@ struct VoxelRenderer
 	int per_frame_uniform_buffer_handle;
 
 	DrawWireCubeGpuData draw_wire_cube_data;
+
+	int3 big_chunk_size = int3(2,2,2);
+	Array<DynamicChunk> dynamic_chunks;
+	int placed_dynamic_chunk_count;
 };
+
+VoxelData & get_dynamic_map_voxel(VoxelRenderer & renderer, int3 world_voxel)
+{
+	int3 world_chunk 	= world_voxel / renderer.draw_options->voxel_settings.voxels_in_chunk;
+	int3 big_grid_chunk = world_chunk / renderer.big_chunk_size;
+
+	int dynamic_chunk_index = -1;
+	for (int i = 0; i < renderer.placed_dynamic_chunk_count; i++)
+	{
+		if (renderer.dynamic_chunks[i].big_grid_chunk_position == big_grid_chunk)
+		{
+			dynamic_chunk_index = i;
+			break;
+		}
+	}
+
+	if (dynamic_chunk_index < 0 && renderer.placed_dynamic_chunk_count < renderer.dynamic_chunks.length())
+	{
+		dynamic_chunk_index = renderer.placed_dynamic_chunk_count;
+		renderer.placed_dynamic_chunk_count += 1;
+
+		// all "new" chunks are placed in front of array, even if they are same as last frame, so that
+		// one index is enough to keep track of used and unused tiles
+		for (int i = dynamic_chunk_index; i < renderer.dynamic_chunks.length(); i++)
+		{
+			if(renderer.dynamic_chunks[i].big_grid_chunk_position == big_grid_chunk)
+			{
+				swap(renderer.dynamic_chunks[i], renderer.dynamic_chunks[dynamic_chunk_index]);
+			}
+		}
+
+		renderer.dynamic_chunks[dynamic_chunk_index].big_grid_chunk_position = big_grid_chunk;
+		clear_slice_data(renderer.dynamic_chunks[dynamic_chunk_index].map.nodes);
+	}
+
+	if (dynamic_chunk_index >= 0)
+	{
+		int3 voxel_in_chunk = world_voxel - big_grid_chunk * renderer.big_chunk_size * renderer.draw_options->voxel_settings.voxels_in_chunk;
+
+		return get_node(renderer.dynamic_chunks[dynamic_chunk_index].map, voxel_in_chunk.x, voxel_in_chunk.y, voxel_in_chunk.z);
+	}
+
+	return garbage_value<VoxelData>;
+}
 
 void setup_per_frame_uniform_buffers(VoxelRenderer & renderer, Camera const & camera, LightSettings const & light_settings)
 {
@@ -166,46 +225,83 @@ void setup_per_frame_uniform_buffers(VoxelRenderer & renderer, Camera const & ca
 		sizeof per_frame_uniform_buffer,
 		&per_frame_uniform_buffer
 	);
-
-	// this has data of current positions etc, apply every frame. not super big
-	*renderer.voxel_object_count = int4(16, 0, 0, 0);
-	// renderer.voxel_object_data[0] = get_gpu_data(renderer.island_1);
-	renderer.voxel_object_data[0].data_start 		= int4(renderer.island_1.map.data_start, 0, 0, 0);
-	renderer.voxel_object_data[0].offset_in_voxels 	= int4(renderer.island_1.position_VS,0);
-	renderer.voxel_object_data[0].size_in_chunks 	= int4(renderer.island_1.map.size_in_chunks, 0);
-
-	renderer.voxel_object_data[1].data_start 		= int4(renderer.island_2.map.data_start, 0, 0, 0);
-	renderer.voxel_object_data[1].offset_in_voxels 	= int4(renderer.island_2.position_VS,0);
-	renderer.voxel_object_data[1].size_in_chunks 	= int4(renderer.island_2.map.size_in_chunks, 0);
-
-	renderer.voxel_object_data[2].data_start 		= int4(renderer.player_voxel_object.map.data_start, 0, 0, 0);
-	renderer.voxel_object_data[2].offset_in_voxels 	= int4(renderer.player_voxel_object.position_VS, 0);
-	renderer.voxel_object_data[2].size_in_chunks 	= int4(renderer.player_voxel_object.map.size_in_chunks, 0);		
-
-	renderer.voxel_object_data[3].data_start 		= int4(renderer.npc_voxel_object.map.data_start, 0, 0, 0);
-	renderer.voxel_object_data[3].offset_in_voxels 	= int4(renderer.npc_voxel_object.position_VS, 0);
-	renderer.voxel_object_data[3].size_in_chunks 	= int4(renderer.npc_voxel_object.map.size_in_chunks, 0);		
-
-	renderer.voxel_object_data[4].data_start 		= int4(renderer.grass_voxel_object.map.data_start, 0, 0, 0);
-	renderer.voxel_object_data[4].offset_in_voxels 	= int4(renderer.grass_voxel_object.position_VS, 0);
-	renderer.voxel_object_data[4].size_in_chunks 	= int4(renderer.grass_voxel_object.map.size_in_chunks, 0);		
-
-	renderer.voxel_object_data[5].data_start 		= int4(renderer.rats_voxel_object.map.data_start, 0, 0, 0);
-	renderer.voxel_object_data[5].offset_in_voxels 	= int4(renderer.rats_voxel_object.position_VS, 0);
-	renderer.voxel_object_data[5].size_in_chunks 	= int4(renderer.rats_voxel_object.map.size_in_chunks, 0);		
-
-	int cloud_index_offset = 6;
-	for (int i = 0; i < renderer.cloud_count; i++)
-	{
-		renderer.voxel_object_data[i + cloud_index_offset].data_start 		= int4(renderer.clouds[i].map.data_start, 0, 0, 0);
-		renderer.voxel_object_data[i + cloud_index_offset].offset_in_voxels = int4(renderer.clouds[i].position_VS, 0);
-		renderer.voxel_object_data[i + cloud_index_offset].size_in_chunks 	= int4(renderer.clouds[i].map.size_in_chunks, 0);		
-	}
-
-	size_t object_buffer_update_size = 16 * sizeof(VoxelObjectGpuData);
-	graphics_buffer_apply(renderer.graphics, renderer.voxel_object_buffer_handle, 0, sizeof(int4) + object_buffer_update_size, true);	
 }
 
+// Use this api to reset draw list, add objects to it and finalize it
+// void begin_draw_list(VoxelRenderer & renderer);
+// void add_to_draw_list(VoxelRenderer & renderer, VoxelObject const & voxel_object);
+// void apply_draw_list(VoxelRenderer & renderer);
+
+// As per matt godbolt, cannot add to draw list without initalizing which does the beginning port
+// implicitly. Correct by construction. Seems nice, is it too complex?
+struct DrawList
+{
+	VoxelRenderer & renderer;
+	uint32_t 		draw_count;
+
+	void add(VoxelObject const & voxel_object)
+	{
+		ASSERT_LESS_THAN(draw_count, renderer.voxel_object_data.length());
+
+		renderer.voxel_object_data[draw_count].data_start 		= int4(voxel_object.map.data_start, 0, 0, 0);
+		renderer.voxel_object_data[draw_count].offset_in_voxels = int4(voxel_object.position_VS, 0);
+		renderer.voxel_object_data[draw_count].size_in_chunks 	= int4(voxel_object.map.size_in_chunks, 0);		
+
+		draw_count += 1;
+	}
+
+	void push_to_graphics()
+	{
+		// this has data of current positions etc, apply every frame. not super big
+		*renderer.voxel_object_count = int4((int)draw_count, 0, 0, 0);
+
+		size_t object_buffer_update_size = draw_count * sizeof(VoxelObjectGpuData);
+		graphics_buffer_apply(renderer.graphics, renderer.voxel_object_buffer_handle, 0, sizeof(int4) + object_buffer_update_size, true);		
+	}
+};
+
+DrawList get_draw_list(VoxelRenderer & renderer)
+{
+	DrawList draw_list = {renderer, 0};
+
+	for (int i = 0; i < renderer.placed_dynamic_chunk_count; i++)
+	{
+		VoxelObject proxy;
+		proxy.map = renderer.dynamic_chunks[i].map;
+		proxy.position_VS = renderer.dynamic_chunks[i].big_grid_chunk_position * renderer.big_chunk_size * renderer.draw_options->voxel_settings.voxels_in_chunk;
+		draw_list.add(proxy);
+	}
+
+	return draw_list;
+}
+
+/*
+void begin_draw_list(VoxelRenderer & renderer)
+{
+	renderer.render_count_this_frame = 0;
+}
+
+void apply_draw_list(VoxelRenderer & renderer)
+{
+	// this has data of current positions etc, apply every frame. not super big
+	*renderer.voxel_object_count = int4(renderer.render_count_this_frame, 0, 0, 0);
+
+	size_t object_buffer_update_size = renderer.render_count_this_frame * sizeof(VoxelObjectGpuData);
+	graphics_buffer_apply(renderer.graphics, renderer.voxel_object_buffer_handle, 0, sizeof(int4) + object_buffer_update_size, true);		
+}
+
+void add_to_draw_list(VoxelRenderer & renderer, VoxelObject const & voxel_object)
+{
+	ASSERT_LESS_THAN(renderer.render_count_this_frame, renderer.voxel_object_data.length());
+
+	int index = renderer.render_count_this_frame;
+	renderer.render_count_this_frame += 1;
+
+	renderer.voxel_object_data[index].data_start 		= int4(voxel_object.map.data_start, 0, 0, 0);
+	renderer.voxel_object_data[index].offset_in_voxels 	= int4(voxel_object.position_VS, 0);
+	renderer.voxel_object_data[index].size_in_chunks 	= int4(voxel_object.map.size_in_chunks, 0);
+}
+*/
 namespace gui
 {
 	inline bool edit(VoxelRenderer & renderer)
@@ -220,12 +316,13 @@ namespace gui
 		// Value("Voxel Data Capacity", renderer.voxel_data_buffer_capacity);
 		Text("Used: %.1f / %.1f K chunks (%.1f%%)", used_kilo_chunks, capacity_kilo_chunks, 100 * used_kilo_chunks / capacity_kilo_chunks);
 		Text("Available: %.1f K chunks", available_kilo_chunks);
+		Text("Dynamic Chunks: %i / %i", (int)renderer.placed_dynamic_chunk_count, (int)renderer.dynamic_chunks.length());
 
 		return false;
 	}
 }
 
-void allocate_chunks(VoxelRenderer & renderer, int3 chunks, VoxelObject & out_object)
+VoxelObject allocate_voxel_object(VoxelRenderer & renderer, int3 chunks)
 {
 	int chunk_count 	= chunks.x * chunks.y * chunks.z;
 	int voxel_count 	= chunk_count * pow3(renderer.draw_options->voxel_settings.voxels_in_chunk);
@@ -237,23 +334,19 @@ void allocate_chunks(VoxelRenderer & renderer, int3 chunks, VoxelObject & out_ob
 	VoxelData * memory 			= renderer.voxel_data_buffer_memory + data_start;
 	renderer.voxel_data_buffer_used 	+= element_count;
 
-	out_object.map.dispose();
-	out_object = {};
+	VoxelObject result = {};
 
-	out_object.map.size_in_chunks = chunks;
-	out_object.map.voxel_count_in_chunk = renderer.draw_options->voxel_settings.voxels_in_chunk;
+	result.map.size_in_chunks = chunks;
+	result.map.voxel_count_in_chunk = renderer.draw_options->voxel_settings.voxels_in_chunk;
 
-	out_object.map.data_start = data_start;
-	out_object.map.nodes = make_slice<VoxelData>(element_count, memory);
+	result.map.data_start = data_start;
+	result.map.nodes = make_slice<VoxelData>(element_count, memory);
+
+	return result;
 }
 
-void allocate_chunks_by_voxels(VoxelRenderer & renderer, int3 voxels, VoxelObject & out_object)
-{
-	int3 chunks = int3(floor(float3(voxels) / renderer.draw_options->voxel_settings.voxels_in_chunk) + 1);
-	allocate_chunks(renderer, chunks, out_object);
-}
 
-void init(VoxelRenderer & renderer, DrawOptions * draw_options, Graphics * graphics)
+void init(VoxelRenderer & renderer, DrawOptions * draw_options, Graphics * graphics, Allocator * persistent_allocator)
 {
 	// Note(Leo): this could be taken as a reference instead of pointer, but that is maybe lying,
 	// as it is stored as a pointer anyway. Also, it could be taken AND stored as a reference, and this could
@@ -301,7 +394,7 @@ void init(VoxelRenderer & renderer, DrawOptions * draw_options, Graphics * graph
 
 	// -----------------------------------------------------------------
 
-	int voxel_object_count = 20;
+	int voxel_object_count = 200;
 
 	renderer.voxel_object_buffer_memory_size = sizeof(int4) + voxel_object_count * sizeof(VoxelObjectGpuData);
 	// size_t voxel_object_buffer_size = sizeof(int4) + voxel_object_count * sizeof(VoxelObjectGpuData);
@@ -315,12 +408,27 @@ void init(VoxelRenderer & renderer, DrawOptions * draw_options, Graphics * graph
 	renderer.voxel_object_buffer_memory = graphics_buffer_get_writeable_memory(graphics, renderer.voxel_object_buffer_handle);
 	renderer.voxel_object_count 		= reinterpret_cast<int4*>(renderer.voxel_object_buffer_memory);
 	renderer.voxel_object_data 			= make_slice<VoxelObjectGpuData>(voxel_object_count, reinterpret_cast<VoxelObjectGpuData*>(renderer.voxel_object_buffer_memory + sizeof(int4)));
+	
+	// -----------------------------------------------------------------
+	
+	renderer.dynamic_chunks = Array<DynamicChunk>(100, *persistent_allocator);
+
+	void reset_allocations(VoxelRenderer & renderer);
+	reset_allocations(renderer);
+
 }
 
 void reset_allocations(VoxelRenderer & renderer)
 {
 	renderer.voxel_data_buffer_used = 0;
 	memset(renderer.voxel_data_buffer_memory, 0, renderer.voxel_data_buffer_capacity * sizeof(VoxelData));
+
+	for (int i = 0; i < renderer.dynamic_chunks.length(); i++)
+	{
+		VoxelObject proxy = allocate_voxel_object(renderer, renderer.big_chunk_size);
+		renderer.dynamic_chunks[i] = {};
+		renderer.dynamic_chunks[i].map = proxy.map;
+	}
 }
 
 // Call prepare_frame always once per frame before drawing dynamic objects
@@ -331,6 +439,7 @@ void prepare_frame(VoxelRenderer & renderer, Allocator&)
 	// clear_slice_data(renderer.npc_chunk_map.nodes);
 
 	clear_memory(renderer.draw_wire_cube_data);
+	renderer.placed_dynamic_chunk_count = 0;
 }
 
 void draw_wire_cube(VoxelRenderer & renderer, float3 min, float3 max)

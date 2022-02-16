@@ -1,3 +1,18 @@
 - Voxels are always cubes
 - chunk is 1 world unit
 	-> voxels_in_chunk define resolution
+
+
+Game is experience importanted game
+	-> nuances and feelings come first
+	-> they dictate the world etc.
+	-> input, controls, interface etc. are created to complement those
+		- care must be taken, since its a video game and controls are 
+		users primary way of experiencing it
+
+Avoid grind at all cost
+Make game playful by making it easy to get big impact
+	-> e.g. rats. move a little, a ton of rats react
+	-> characters react like in old school cartoons instead of like in videogames
+
+PLAYFULNESS!!!
