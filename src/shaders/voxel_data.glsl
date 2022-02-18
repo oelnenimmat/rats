@@ -103,9 +103,8 @@ ivec3 transform_voxel_to_local_voxel_space(ivec3 voxel_in_global_voxel_space, in
 ivec3 transform_voxel_to_local_chunk_space(ivec3 voxel_in_global_voxel_space, int index)
 {
 	ivec3 voxel_in_local_voxel_space = transform_voxel_to_local_voxel_space(voxel_in_global_voxel_space, index);
-	ivec3 chunk_in_local_chunk_space = voxel_in_local_voxel_space / get_voxels_in_chunk();
+	ivec3 chunk_in_local_chunk_space = ivec3(floor(vec3(voxel_in_local_voxel_space) / get_voxels_in_chunk()));
 	return chunk_in_local_chunk_space;
-
 	// ivec3 chunk_in_global_chunk_space = voxel_in_global_voxel_space / get_voxels_in_chunk();
 	// return chunk_in_global_chunk_space - voxel_objects[index].offset_in_chunks.xyz;
 }

@@ -1,0 +1,955 @@
+#pragma once
+
+#include "vectors.hpp"
+#include "Gradient.hpp"
+#include "memory.hpp"
+
+#include "VoxelRenderer.hpp"
+
+void break_point_marker() {}
+
+template <typename T> constexpr int enum_names = 0;
+template <typename T> constexpr int enum_count = array_length(enum_names<T>);
+
+#define ENUM_NAMES_C_STRING(enum_type) template<> constexpr char const * enum_names<enum_type> [] =
+
+// @basic_enum_names
+enum struct RatBehaviour : int
+{
+	flee = 0,
+	attack,
+};
+
+ENUM_NAMES_C_STRING(RatBehaviour)
+{
+	"flee",
+	"attack"
+};
+
+
+// @serialize
+// @gui_edit
+struct RatSettings
+{
+	int count 				= 10;
+	float3 world_min 		= float3(0,0,0);
+	float3 world_max 		= float3(2,2,2);
+	float3 spawn_position;
+	float spawn_rate_per_second;
+
+	Gradient colors;
+
+	float speed;
+
+	float start_escape_distance;
+	float stop_escape_distance;
+
+	float remove_after_fall_height;
+
+	RatBehaviour behaviour;
+};
+
+inline SERIALIZE_STRUCT(RatSettings const & rat_settings)
+{
+	serializer.write("count", rat_settings.count);
+	serializer.write("world_min", rat_settings.world_min);
+	serializer.write("world_max", rat_settings.world_max);
+	serializer.write("spawn_position", rat_settings.spawn_position);
+	serializer.write("spawn_rate_per_second", rat_settings.spawn_rate_per_second);
+	serializer.write("colors", rat_settings.colors);
+	serializer.write("speed", rat_settings.speed);
+	serializer.write("start_escape_distance", rat_settings.start_escape_distance);
+	serializer.write("stop_escape_distance", rat_settings.stop_escape_distance);
+	serializer.write("remove_after_fall_height", rat_settings.remove_after_fall_height);
+	serializer.write("behaviour", rat_settings.behaviour);
+}
+
+inline DESERIALIZE_STRUCT(RatSettings & rat_settings)
+{
+	serializer.read("count", rat_settings.count);
+	serializer.read("world_min", rat_settings.world_min);
+	serializer.read("world_max", rat_settings.world_max);
+	serializer.read("spawn_position", rat_settings.spawn_position);
+	serializer.read("spawn_rate_per_second", rat_settings.spawn_rate_per_second);
+	serializer.read("colors", rat_settings.colors);
+	serializer.read("speed", rat_settings.speed);
+	serializer.read("start_escape_distance", rat_settings.start_escape_distance);
+	serializer.read("stop_escape_distance", rat_settings.stop_escape_distance);
+	serializer.read("remove_after_fall_height", rat_settings.remove_after_fall_height);
+	serializer.read("behaviour", rat_settings.behaviour);
+}
+
+namespace gui
+{
+	inline bool edit (RatSettings & rat_settings)
+	{
+		auto gui = gui_helper();
+		gui.edit("count", rat_settings.count);
+		gui.edit("world_min", rat_settings.world_min);
+		gui.edit("world_max", rat_settings.world_max);
+		gui.edit("spawn_position", rat_settings.spawn_position);
+		gui.edit("spawn_rate_per_second", rat_settings.spawn_rate_per_second);
+		gui.edit("colors", rat_settings.colors);
+		gui.edit("speed", rat_settings.speed);
+		gui.edit("start_escape_distance", rat_settings.start_escape_distance);
+		gui.edit("stop_escape_distance", rat_settings.stop_escape_distance);
+		gui.edit("remove_after_fall_height", rat_settings.remove_after_fall_height);
+		gui.edit_enum("behaviour", &rat_settings.behaviour);
+
+		return gui.dirty;
+	}
+}
+
+enum struct RatState
+{
+	idle,
+	moving,
+	escape,
+	fall,
+	attack,
+	gone
+};
+
+// template<typename T>
+// struct EnumTraits {};
+
+// template<typename T>
+// constexpr EnumTraits<T> enum_traits() { return EnumTraits<T>{}; }
+
+// template<>
+// struct EnumTraits<RatState>
+// {
+// 	static constexpr int count = 3;
+// 	static constexpr char const * names [] =
+// 	{
+// 		"idle",
+// 		"moving",
+// 		"escape"
+// 	};
+// };
+
+constexpr char const * to_c_string(RatState s)
+{
+	switch(s)
+	{
+		case RatState::idle: return "idle";
+		case RatState::moving: return "moving";
+		case RatState::escape: return "escape";
+		case RatState::fall: return "fall";
+		case RatState::attack: return "attack";
+		case RatState::gone: return "gone";
+	}
+
+	return "<Invalid RatState value>";
+}
+
+struct Rat
+{
+	float3 		position;
+	float 		state_timer;
+	RatState 	state;
+	float3 		target_position;
+	float 		y_velocity;
+};
+
+float3 move_rat_towards_position(
+	float3 			current_position,
+	float3 const & 	target_position,
+	World const & 	world,
+	float 			speed,
+	float3 const &  avoid_vector,
+	float 			delta_time
+)
+{
+	float3 to_target = target_position - current_position + avoid_vector;
+	to_target.y = 0;
+	float3 end_position = current_position + normalize(to_target) * speed * delta_time;
+
+	float walkable_terrain_height;
+	bool above_walkable_terrain = get_closest_height_below_position(
+		world, 
+		end_position + float3(0, 0.5, 0),
+		float3(-0.05f, 0.0f, -0.05f),
+		float3(0.05f, 0.2f, 0.05f),
+		&walkable_terrain_height
+	);
+
+	if (above_walkable_terrain)
+	{
+		end_position.y = walkable_terrain_height;
+	}		
+
+	return end_position;
+}
+
+struct RatRenderer
+{
+	VoxelObject voxel_object;
+	float3 		world_position;
+	float3 		render_offset;
+	float 		WS_to_VS;
+};
+
+struct IdleRats
+{
+	size_t capacity;
+	size_t count;
+
+	float3 * positions;
+	float * timers;
+
+	void add(float3 position, float timer)
+	{
+		ASSERT_LESS_THAN(count, capacity);
+
+		positions[count] = position;
+		timers[count] = timer;
+
+		count += 1;
+	}
+
+	void remove_at(size_t index)
+	{
+		ASSERT_LESS_THAN(index, count);
+
+		count -= 1;
+
+		positions[index] = positions[count];
+		timers[index] = timers[count];
+	}
+};
+
+
+struct MovingRats
+{
+	size_t capacity;
+	size_t count;
+
+	float3 * positions;
+	float3 * target_positions;
+
+	void add(float3 position, float3 target_position)
+	{
+		ASSERT_LESS_THAN(count, capacity);
+
+		positions[count] = position;
+		target_positions[count] = target_position;
+
+		count += 1;
+	}
+
+	void remove_at(size_t index)
+	{
+		ASSERT_LESS_THAN(index, count);
+
+		count -= 1;
+
+		positions[index] = positions[count];
+		target_positions[index] = target_positions[count];
+	}
+};
+
+struct EscapingRats
+{
+	size_t capacity;
+	size_t count;
+
+	float3 * positions;
+
+	void add(float3 position)
+	{
+		ASSERT_LESS_THAN(count, capacity);
+
+		positions[count] = position;
+
+		count += 1;
+	}
+
+	void remove_at(size_t index)
+	{
+		ASSERT_LESS_THAN(index, count);
+
+		count -= 1;
+
+		positions[index] = positions[count];
+	}
+};
+
+struct FallingRats
+{
+	size_t capacity;
+	size_t count;
+
+	float3 * positions;
+	float * y_velocities;
+
+	void add(float3 position)
+	{
+		ASSERT_LESS_THAN(count, capacity);
+
+		positions[count] = position;
+		y_velocities[count] = 0;
+
+		count += 1;
+	}
+};
+
+struct AttackingRats
+{
+	size_t capacity;
+	size_t count;
+
+	float3 * positions;
+
+	void add(float3 position)
+	{
+		ASSERT_LESS_THAN(count, capacity);
+
+		positions[count] = position;
+
+		count += 1;
+	}
+};
+
+struct RatSystem_2
+{
+	IdleRats 		idle_rats;
+	MovingRats 		moving_rats;
+	EscapingRats 	escaping_rats;
+	FallingRats 	falling_rats;
+	AttackingRats 	attacking_rats;
+
+
+	RatSettings * settings;
+
+	float cumulative_spawn_time;
+	int spawned_count;
+	// int gone_count;
+};
+
+float3 compute_avoid_vector(float3 position, int other_positions_count, float3 * other_positions)
+{
+	float3 result = float3(0,0,0);
+
+	for (int i = 0; i < other_positions_count; i++)
+	{
+		float3 to_other = position - other_positions[i];
+		float distance_to_other = length(to_other);
+
+		if (distance_to_other < 1 && distance_to_other > 0.001)
+		{
+			result += -normalize(to_other) * (1 - distance_to_other);
+		}
+	}
+
+	return result;
+}
+
+void update_rats_2(RatSystem_2 & rats, float delta_time, World const & world, float3 player_position)
+{
+	if (rats.spawned_count < rats.settings->count)
+	{
+		rats.cumulative_spawn_time += delta_time;
+		int spawn_count = (int)std::floor(rats.cumulative_spawn_time * rats.settings->spawn_rate_per_second);
+
+		// if (spawn_count > 0)
+		{
+			int rats_left_to_spawn 		= rats.settings->count - rats.spawned_count;
+			spawn_count 				= rats::min(spawn_count, rats_left_to_spawn);
+			rats.cumulative_spawn_time 	-= spawn_count / rats.settings->spawn_rate_per_second;
+
+			for (int i = 0; i < spawn_count; i++)
+			{
+				rats.idle_rats.add(rats.settings->spawn_position, 0);
+			}
+		}
+
+		rats.spawned_count += spawn_count;
+	}
+
+
+	for(int i = 0; i < rats.idle_rats.count; i++)
+	{
+		float3 to_player = player_position - rats.idle_rats.positions[i];
+		if (length(to_player) < rats.settings->start_escape_distance)
+		{
+			rats.escaping_rats.add(rats.idle_rats.positions[i]);
+
+			rats.idle_rats.remove_at(i);
+			i -= 1;
+		}
+	}
+
+	for(int i = 0; i < rats.moving_rats.count; i++)
+	{
+		float3 to_player = player_position - rats.moving_rats.positions[i];
+		if (length(to_player) < rats.settings->start_escape_distance)
+		{
+			rats.escaping_rats.add(rats.moving_rats.positions[i]);
+
+			rats.moving_rats.remove_at(i);
+			i -= 1;
+		}
+	}
+
+
+
+	// Update counts are stored before anyone has change to remove or add any rats 
+	// to or from anywhere else. This way each rat is only updated once
+	int idle_update_count 		= rats.idle_rats.count;
+	int moving_update_count 	= rats.moving_rats.count;
+	int escaping_update_count 	= rats.escaping_rats.count;
+	int falling_update_count 	= rats.falling_rats.count;
+	int attacking_update_count 	= rats.attacking_rats.count;
+
+	for (int i = 0; i < idle_update_count; i++)
+	{
+		rats.idle_rats.timers[i] -= delta_time;
+
+		if (rats.idle_rats.timers[i] < 0)
+		{	
+			float3 target_position = random_float3(rats.settings->world_min, rats.settings->world_max);
+
+			float walkable_terrain_height;
+			bool above_walkable_terrain = get_closest_height_below_position(
+				world, 
+				rats.idle_rats.positions[i] + float3(0, 0.5, 0),
+				float3(-0.05f, 0.0f, -0.05f),
+				float3(0.05f, 0.2f, 0.05f),
+				&walkable_terrain_height
+			);
+
+			if (above_walkable_terrain)
+			{
+				target_position.y = walkable_terrain_height;
+			}
+
+			rats.moving_rats.add(rats.idle_rats.positions[i], target_position);
+			rats.idle_rats.remove_at(i);
+
+			idle_update_count -= 1;
+			i -= 1;
+		}
+	}
+
+	for (int i = 0; i < moving_update_count; i++)
+	{
+		float3 & position = rats.moving_rats.positions[i];
+		float3 const & target_position = rats.moving_rats.target_positions[i];
+
+		float3 avoid_vector = float3(0,0,0);
+		avoid_vector += compute_avoid_vector(position, rats.idle_rats.count, rats.idle_rats.positions);
+		avoid_vector += compute_avoid_vector(position, rats.moving_rats.count, rats.moving_rats.positions);
+		avoid_vector += compute_avoid_vector(position, rats.escaping_rats.count, rats.escaping_rats.positions);
+
+		position = move_rat_towards_position(
+			position,
+			target_position,
+			world,
+			rats.settings->speed,
+			avoid_vector,
+			delta_time
+		);
+
+		if (length(target_position.xz - position.xz) < 0.1f)
+		{
+			rats.idle_rats.add(position, random_float(1,4));
+			rats.moving_rats.remove_at(i);
+
+			moving_update_count -= 1;
+			i -= 1;
+		}
+	}
+
+	for (int i = 0; i < escaping_update_count; i++)
+	{
+		float3 & position = rats.escaping_rats.positions[i];
+
+		float3 avoid_vector = float3(0,0,0);
+		avoid_vector += compute_avoid_vector(position, rats.idle_rats.count, rats.idle_rats.positions);
+		avoid_vector += compute_avoid_vector(position, rats.moving_rats.count, rats.moving_rats.positions);
+		avoid_vector += compute_avoid_vector(position, rats.escaping_rats.count, rats.escaping_rats.positions);
+
+		float3 from_player = position - player_position;
+
+		if (length(from_player.xz) < rats.settings->stop_escape_distance)
+		{
+			position += normalize(from_player + avoid_vector) * rats.settings->speed * delta_time;
+
+			float walkable_terrain_height;
+			bool above_walkable_terrain = get_closest_height_below_position(
+				world,
+				position + float3(0, 0.5, 0),
+				float3(-0.05f, 0.0f, -0.05f),
+				float3(0.05f, 0.2f, 0.05f),
+				&walkable_terrain_height
+			);
+
+			if (above_walkable_terrain)
+			{
+				position.y = walkable_terrain_height;
+			}
+		}
+		else
+		{
+			rats.idle_rats.add(position, random_float(1, 4));
+			rats.escaping_rats.remove_at(i);
+
+			escaping_update_count -= 1;
+			i -= 1;
+		}
+	}
+};
+
+void draw_single_rat(
+	RatRenderer & 	renderer,
+	float3 			position_WS,
+	float3 			size_WS,
+	float4 			color)
+{
+	float3 start_WS = position_WS - renderer.render_offset;
+
+	int3 start_VS = int3(floor(start_WS * renderer.WS_to_VS));
+	int3 end_VS = max(start_VS + int3(1,1,1), int3(floor((start_WS + size_WS) * renderer.WS_to_VS)));
+
+	for (int z = start_VS.z; z <= end_VS.z; z++)
+	for (int y = start_VS.y; y <= end_VS.y; y++)
+	for (int x = start_VS.x; x <= end_VS.x; x++)
+	{
+		auto & node = get_node(renderer.voxel_object.map, x, y, z);
+		node.material() = 1;
+		node.color = color;
+		node.normal() = normalize(float3(
+			(float)(x == end_VS.x) - (float)(x == start_VS.x),
+			(float)(y == end_VS.y) - (float)(y == start_VS.y),
+			(float)(z == end_VS.z) - (float)(z == start_VS.z)
+		));
+	}
+}
+
+void draw_rats_2(RatSystem_2 const & rats, RatRenderer & renderer)
+{
+	for (int i = 0; i < rats.idle_rats.count; i++)
+	{
+		float4 color = rats.settings->colors.evaluate(SmallXXHash::seed(i).get_float_A_01());
+		draw_single_rat(renderer, rats.idle_rats.positions[i], float3(0.1, 0.4, 0.1), color);
+	}
+
+	for (int i = 0; i < rats.moving_rats.count; i++)
+	{
+		float4 color = rats.settings->colors.evaluate(SmallXXHash::seed(i).get_float_A_01());
+		draw_single_rat(renderer, rats.moving_rats.positions[i], float3(0.1, 0.2, 0.1), color);
+	}
+
+	for (int i = 0; i < rats.escaping_rats.count; i++)
+	{
+		float4 color = rats.settings->colors.evaluate(SmallXXHash::seed(i).get_float_A_01());
+		draw_single_rat(renderer, rats.escaping_rats.positions[i], float3(0.1, 0.2, 0.1), color);
+	}
+}
+
+struct RatSystem
+{
+	RatSettings settings;	
+	Array<Rat> 	rats;
+	bool 		draw_bounds;
+
+	RatSystem_2 system_2;
+
+	float cumulative_spawn_time;
+	int spawned_count;
+	int gone_count;
+};
+
+void reset(RatSystem & rats)
+{
+	rats.cumulative_spawn_time 	= 0;
+	rats.spawned_count 			= 0;
+	rats.gone_count 			= 0;
+
+	rats.system_2.cumulative_spawn_time = 0;
+	rats.system_2.spawned_count = 0;
+	rats.system_2.idle_rats.count = 0;
+	rats.system_2.moving_rats.count = 0;
+	rats.system_2.escaping_rats.count = 0;
+
+	// rats.gone_count = 0;
+	// for(int i = 0; i < rats.rats.length(); i++)
+	// {
+	// 	rats.rats[i].position 		= random_float3(rats.settings.world_min, rats.settings.world_max);
+	// 	rats.rats[i].state 			= RatState::idle;
+	// 	rats.rats[i].state_timer 	= 0;
+	// 	rats.rats[i].y_velocity 	= 0;
+	// }
+}
+
+namespace gui
+{
+	inline bool edit(RatSystem & rats)
+	{
+		auto gui = gui_helper();
+		gui.edit(edit(rats.settings));
+		gui.edit(Checkbox("draw_bounds", &rats.draw_bounds));
+
+		if (BeginChild("ratlist", ImVec2(0, 200), true))
+		{
+			for (Rat const & rat : rats.rats)
+			{
+				Value(rat.position); SameLine(); Text("state: %s", to_c_string(rat.state));
+			}
+		}
+		EndChild();	
+
+		int spawn_count = (int)std::floor(rats.system_2.cumulative_spawn_time * rats.settings.spawn_rate_per_second);
+
+		// Value("cumulative_spawn_time", rats.cumulative_spawn_time);
+		// Value("spawned_count", spawn_count);
+		// Text("Gone: %i/%i(%i)", rats.gone_count, rats.spawned_count, (int)rats.rats.length());
+
+
+		Value("cumulative_spawn_time", rats.system_2.cumulative_spawn_time);
+		// Value("spawned_count", rats.system_2.spawned_count);
+		Text("Spawned: %i/%i", rats.system_2.spawned_count, rats.system_2.settings->count);
+		// Text("Gone: %i/%i(%i)", rats.gone_count, rats.spawned_count, (int)rats.rats.length());
+
+		Value("idle", (int)rats.system_2.idle_rats.count);
+		Value("moving", (int)rats.system_2.moving_rats.count);
+		Value("escaping", (int)rats.system_2.escaping_rats.count);
+		Value("attacking", (int)rats.system_2.attacking_rats.count);
+		Value("falling", (int)rats.system_2.falling_rats.count);
+
+		if (Button("Generate"))
+		{
+			reset(rats);
+		}
+
+		return gui.dirty;
+	}
+}
+
+void init(RatSystem & rats, Allocator & persistent_allocator)
+{
+	rats.rats = Array<Rat>(rats.settings.count, persistent_allocator);
+
+	rats.system_2.settings = &rats.settings;
+
+	int capacity = rats.settings.count;
+
+	rats.system_2.idle_rats.capacity = capacity;
+	rats.system_2.idle_rats.positions = persistent_allocator.allocate<float3>(capacity);
+	rats.system_2.idle_rats.timers = persistent_allocator.allocate<float>(capacity);
+
+	rats.system_2.moving_rats.capacity = capacity;
+	rats.system_2.moving_rats.positions = persistent_allocator.allocate<float3>(capacity);
+	rats.system_2.moving_rats.target_positions = persistent_allocator.allocate<float3>(capacity);
+
+	rats.system_2.escaping_rats.capacity = capacity;
+	rats.system_2.escaping_rats.positions = persistent_allocator.allocate<float3>(capacity);
+
+	reset(rats);
+}
+
+void cleanup(RatSystem & rats, Allocator & same_persistent_allocator)
+{
+	rats.system_2.idle_rats.capacity = 0;
+	rats.system_2.idle_rats.count = 0;
+	same_persistent_allocator.deallocate(rats.system_2.idle_rats.positions);
+	same_persistent_allocator.deallocate(rats.system_2.idle_rats.timers);
+
+	rats.system_2.moving_rats.capacity = 0;
+	rats.system_2.moving_rats.count = 0;
+	same_persistent_allocator.deallocate(rats.system_2.moving_rats.positions);
+	same_persistent_allocator.deallocate(rats.system_2.moving_rats.target_positions);
+
+	rats.system_2.escaping_rats.capacity = 0;
+	rats.system_2.escaping_rats.count = 0;
+	same_persistent_allocator.deallocate(rats.system_2.escaping_rats.positions);
+}
+
+void prepare_frame(RatRenderer & renderer, VoxelSettings const & voxel_settings, float3 proximity_target)
+{
+	float WS_to_VS = voxel_settings.WS_to_VS();
+	clear_slice_data(renderer.voxel_object.map.nodes);
+
+	float3 render_chunk_size = float3(renderer.voxel_object.map.size_in_chunks) * voxel_settings.CS_to_WS();
+
+	float3 render_chunk_position_WS = proximity_target - render_chunk_size / 2.0f;
+	int3 render_chunk_position_CS 	= int3(floor(render_chunk_position_WS * voxel_settings.WS_to_CS()));
+	int3 render_chunk_position_VS 	= render_chunk_position_CS * voxel_settings.voxels_in_chunk;
+
+	renderer.voxel_object.position_VS = render_chunk_position_VS;
+
+	renderer.render_offset = float3(render_chunk_position_VS) * voxel_settings.VS_to_WS();
+
+	renderer.WS_to_VS = voxel_settings.WS_to_VS();
+}
+
+void draw_rats(RatSystem const & rats, RatRenderer & renderer)
+{
+	// return draw_rats_2(rats.system_2, renderer);
+
+
+	for (int i = 0; i < rats.spawned_count; i++)
+	{
+		if (rats.rats[i].state == RatState::gone)
+		{
+			continue;
+		}
+
+		float3 start_WS = rats.rats[i].position - renderer.render_offset;
+		float3 size_WS 	= float3(0.1, 0.2, 0.1);
+		if (rats.rats[i].state == RatState::idle)
+		{
+			size_WS.y = 0.4;
+		}
+
+		int3 start_VS 	= int3(floor(start_WS * renderer.WS_to_VS));
+		int3 end_VS 	= max(start_VS + int3(1,1,1), int3(floor((start_WS + size_WS) * renderer.WS_to_VS)));
+
+		for (int z = start_VS.z; z <= end_VS.z; z++)
+		for (int y = start_VS.y; y <= end_VS.y; y++)
+		for (int x = start_VS.x; x <= end_VS.x; x++)
+		{
+			auto & node = get_node(renderer.voxel_object.map, x, y, z);
+			// auto & node = get_dynamic_map_voxel(renderer, int3(x,y,z));
+			node.material() = 1;
+			node.color = rats.settings.colors.evaluate(SmallXXHash::seed(i).get_float_A_01());
+
+			node.normal() = normalize(float3(
+				(float)(x == end_VS.x) - (float)(x == start_VS.x),
+				(float)(y == end_VS.y) - (float)(y == start_VS.y),
+				(float)(z == end_VS.z) - (float)(z == start_VS.z)
+			));
+		}
+	}
+}
+
+void update_rats(
+	RatSystem & rats,
+	World const & world,
+	float3 player_position,
+	float delta_time
+)
+{
+	// return update_rats_2(rats.system_2, delta_time, world, player_position);
+
+
+	if (rats.spawned_count < rats.rats.length())
+	{
+		rats.cumulative_spawn_time += delta_time;
+		int spawn_count = (int)std::floor(rats.cumulative_spawn_time * rats.settings.spawn_rate_per_second);
+
+		if (spawn_count > 0)
+		{
+			int rats_left_to_spawn 		= rats.rats.length() - rats.spawned_count;
+			spawn_count 				= rats::min(spawn_count, rats_left_to_spawn);
+			rats.cumulative_spawn_time 	-= spawn_count / rats.settings.spawn_rate_per_second;
+
+			for (int i = 0; i < spawn_count; i++)
+			{
+				Rat & rat 		= rats.rats[i + rats.spawned_count];
+				rat.position 	= rats.settings.spawn_position;
+				rat.state_timer = 0;
+				rat.state 		= RatState::idle;
+				rat.y_velocity  = 0;
+			}
+
+			rats.spawned_count += spawn_count;
+		}
+	}
+
+	for (int i = 0; i < rats.spawned_count; i++)
+	{
+		Rat & rat = rats.rats[i];
+
+		// this is now separately so we dont accidentally set its state to realive
+		if (rat.state == RatState::gone)
+		{
+			continue;
+		}
+
+		if (length(rat.position - player_position) < rats.settings.start_escape_distance)
+		{
+			switch(rats.settings.behaviour)
+			{
+				case RatBehaviour::flee:
+					rat.state = RatState::escape;
+					break;
+
+				case RatBehaviour::attack:
+					rat.state = RatState::attack;
+					break;
+			}
+		}
+
+		{
+			float walkable_terrain_height;
+			bool above_walkable_terrain = get_closest_height_below_position(
+				world,
+				rat.position + float3(0, 0.5f, 0),
+				float3(-0.05f, 0.0f, -0.05f),
+				float3(0.05f, 0.2f, 0.05f),
+				&walkable_terrain_height
+			);
+
+			if (above_walkable_terrain == false || (walkable_terrain_height < rat.position.y))
+			{
+				rat.state = RatState::fall;
+			}
+		}
+
+		float3 avoid_vector = float3(0,0,0);
+		for (int u = 0; u < rats.rats.length(); u++)
+		{
+			if (rats.rats[u].state == RatState::gone)
+			{
+				continue;
+			}
+
+			float3 to_u_rat = rats.rats[u].position - rats.rats[i].position;
+			float distance_to_u_rat = length(to_u_rat);
+
+			if (distance_to_u_rat < 1 && distance_to_u_rat > 0.01)
+			{
+				avoid_vector += -normalize(to_u_rat) * (1 - distance_to_u_rat);
+			}
+		}
+
+
+		switch (rat.state)
+		{
+			case RatState::idle:
+			{	
+				if (rat.state_timer > 0)
+				{
+					rat.state_timer -= delta_time;
+				}
+				else
+				{
+					rat.target_position = random_float3(rats.settings.world_min, rats.settings.world_max);
+			
+					float walkable_terrain_height;
+					bool above_walkable_terrain = get_closest_height_below_position(
+						world, 
+						rat.position + float3(0, 0.5, 0),
+						float3(-0.05f, 0.0f, -0.05f),
+						float3(0.05f, 0.2f, 0.05f),
+						&walkable_terrain_height
+					);
+					if (above_walkable_terrain)
+					{
+						rat.target_position.y = walkable_terrain_height;
+					}
+
+					rat.state = RatState::moving;
+				}
+			} break;
+
+			case RatState::moving:
+			{
+				rat.position = move_rat_towards_position(
+					rat.position,
+					rat.target_position,
+					world,
+					rats.settings.speed,
+					avoid_vector,
+					delta_time
+				);
+
+				if (length(rat.position.xz - rat.target_position.xz) < 0.1f)
+				{
+					rat.state 		= RatState::idle;
+					rat.state_timer = random_float(1,4);
+				}
+			} break;
+
+			case RatState::escape:
+			{
+				float3 from_player = rat.position - player_position;
+
+				// float2 to_target_xz = rat.target_position.xz - rat.position.xz;
+				// if (length(to_target_xz) > 0.1f)
+				if (length(from_player.xz) < rats.settings.stop_escape_distance)
+				{
+					rat.position.xz = rat.position.xz + normalize(from_player.xz) * rats.settings.speed * delta_time;
+				}
+				else
+				{
+					rat.state = RatState::idle;
+					rat.state_timer = random_float(1, 4);
+				}
+
+				float walkable_terrain_height;
+				bool above_walkable_terrain = get_closest_height_below_position(
+					world, 
+					rat.position + float3(0, 0.5, 0),
+					float3(-0.05f, 0.0f, -0.05f),
+					float3(0.05f, 0.2f, 0.05f),
+					&walkable_terrain_height
+				);
+
+				if (above_walkable_terrain)
+				{
+					rat.position.y = walkable_terrain_height;
+				}
+			} break;
+
+			case RatState::fall:
+			{
+				float walkable_terrain_height;
+				bool above_walkable_terrain = get_closest_height_below_position(
+					world,
+					rat.position + float3(0, 0.2, 0), 
+					float3(-0.05f, 0.0f, -0.05f),
+					float3(0.05f, 0.2f, 0.05f),
+					&walkable_terrain_height
+				);
+
+				if (above_walkable_terrain && (rat.position.y < walkable_terrain_height))
+				{
+					rat.position.y = walkable_terrain_height;
+					rat.y_velocity = 0;
+					rat.state = RatState::idle;
+				}
+				else
+				{
+					rat.y_velocity += -10 * delta_time;
+					rat.position.y += rat.y_velocity * delta_time;
+
+					if (rat.y_velocity < -1)
+					{
+						break_point_marker();
+					}
+
+					if (rat.position.y < rats.settings.remove_after_fall_height)
+					{
+						rat.state 		= RatState::gone;
+						rats.gone_count += 1 ;
+					}
+				}
+
+			} break;
+
+			case RatState::attack:
+				rat.position = move_rat_towards_position(
+					rat.position,
+					player_position,
+					world,
+					rats.settings.speed,
+					avoid_vector,
+					delta_time
+				);
+
+				if (length(rat.position.xz - rat.target_position.xz) > 2.0f)
+				{
+					rat.state 		= RatState::idle;
+					rat.state_timer = random_float(1,4);
+				}
+				break;
+
+			case RatState::gone:
+				// handled at the top of the loop
+				break;
+		}
+	}
+}

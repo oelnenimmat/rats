@@ -1,17 +1,31 @@
 Current goal
 
+
+mvp game:
+	player dies
+		from k button
+		from rats' attack
+		from falling
+
+	player respawns
+		player respawns on a distinct location
+
+	rats attack on other island
+		make island look different
+			generated city ground tiles etc.
+
+
+
 rats:
-
-
-proximity render
+proximity renderer
 	- partition space into multichunks, allocate a amount of those and render when next to player
 		contrast with dynamic chunks (old): render where first requested, results in flickering 
 		when the first requester moves around and chunk needs to rendered elsewhere
 	- some amount of extra chunks?
 	- maybe 9x9x9 where center is normal and others are half precision
-	- all rats should render to same area, and just be clipped if they are too far
 	- later:
 		- more customized render chunk around any terrain that rats are allowed to traverse
+
 
 
 rats:

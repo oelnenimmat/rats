@@ -80,13 +80,16 @@ struct Character
 
 	// external interface thing, computed in update
 	float3 grounded_position;
+
+	bool dead = false;
 };
 
-void init(Character & character)
+void reset(Character & character)
 {
 	character.position 		= character.start_position;
 	character.y_position 	= character.start_position.y;
 	character.y_velocity 	= 0;
+	character.dead 			= false;
 }
 
 inline SERIALIZE_STRUCT(Character const & character)
@@ -164,7 +167,7 @@ struct CharacterUpdateJob
 
 		if (input.reset)
 		{
-			init(character);
+			reset(character);
 		}
 
 		float3 movement = float3(input.move_x, 0, input.move_z) * delta_time * character.speed;
@@ -201,6 +204,11 @@ struct CharacterUpdateJob
 
 		character.y_position += character.y_velocity * delta_time;
 		
+		if (character.y_position < -30)
+		{
+			character.dead = true;
+		}
+
 		// todo: if we moved more than some threshold in frame, check multiple spots alog path to see if went through some objects
 
 		if (above_walkable_terrain && (character.y_position < walkable_terrain_height))

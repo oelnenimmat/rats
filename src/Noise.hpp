@@ -6,6 +6,9 @@ Todo:
 	- evaluate takes noise settings
 	- noise settings has options for gradient type, tiling etc.
 		so that there is one switch inside evaluate
+
+https://blog.demofox.org/2021/04/11/perlin-noise-experiments/
+http://lukas-polok.cz/tutorial_sphere.htm
 */
 
 #include "math.hpp"

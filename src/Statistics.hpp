@@ -40,6 +40,47 @@ void update_statistics(Statistics & s, float unscaled_delta_time)
 	s.fps 			= (int)(1.0f / s.frame_time);
 }
 
+struct Timing
+{
+	char const * 			name;
+	MeanBuffer<float, 20> 	times;
+	// int indent;
+};
+
+struct Timings2
+{
+	using TimeBuffer = MeanBuffer<float, 20>;
+
+	int count;
+	static constexpr int capacity = 50;
+	Timing timings [capacity];
+};
+
+void push_time(Timings2 & timings, char const * name, float time)
+{
+	for(int i = 0; i < timings.count; i++)
+	{
+		// Literally compare pointers, it is intended use
+		if (timings.timings[i].name == name)
+		{
+			timings.timings[i].times.put(time);
+			// timings.timings[i].indent = indent;
+			return;
+		}
+	}
+
+	ASSERT_LESS_THAN(timings.count, timings.capacity);
+
+	timings.timings[timings.count] = {};
+	timings.timings[timings.count].name = name;
+	timings.timings[timings.count].times.put(time);
+	// timings.timings[timings.count].indent = 0;
+
+	timings.count += 1;
+}
+
+#define TIME_FUNCTION_2(name, func) {auto sw = Stopwatch::start_new(); func; push_time(engine.timings_2, name, sw.elapsed_milliseconds()); }
+
 struct Timings
 {
 	using TimeBuffer = MeanBuffer<float, 20>;
@@ -81,6 +122,15 @@ struct Timings
 
 namespace gui
 {
+	void display(Timings2 const & timings)
+	{
+		Text("Timings");
+		for(int i = 0; i < timings.count; i++)
+		{
+			Value(timings.timings[i].name, timings.timings[i].times.mean_value);
+		}
+	}
+
 	void display(char const * name, Timings const & timings)
 	{
 		if (TreeNode(name))

@@ -1,6 +1,6 @@
 #include "VoxelRenderer.hpp"
 
-#include "engine.hpp"
+#include "Engine.hpp"
 
 #include "File.hpp"
 #include "Window.hpp"
@@ -30,6 +30,8 @@
 #include "collisions.hpp"
 #include "Clouds.hpp"
 #include "Rats.hpp"
+
+#include "Game.hpp"
 
 static void initialize_engine(Engine&, Graphics*, Window*, Input*);
 
@@ -156,11 +158,8 @@ void engine_recreate_world(Engine & engine)
 	engine.renderer.grass_voxel_object = allocate_voxel_object(engine.renderer, chunks_for_grass);
 
 	int3 chunks_for_rats = int3(16,4,16);
-	engine.rats.renderer.voxel_object.map.dispose();
-	engine.rats.renderer.voxel_object = allocate_voxel_object(engine.renderer, chunks_for_rats);
-
-	engine.rats_2.renderer.voxel_object.map.dispose();
-	engine.rats_2.renderer.voxel_object = allocate_voxel_object(engine.renderer, chunks_for_rats);
+	engine.rat_renderer.voxel_object.map.dispose();
+	engine.rat_renderer.voxel_object = allocate_voxel_object(engine.renderer, chunks_for_rats);
 
 	// --------------------------------------------------------------------
 
@@ -247,6 +246,7 @@ void initialize_engine(Engine & engine, Graphics * graphics, Window * window, In
 	// -----------------------------------------------------------------
 
 	engine_recreate_world(engine);
+	game_reset_timeline(engine);
 }
 
 void update_engine(Engine & engine)
@@ -287,6 +287,11 @@ void update_engine(Engine & engine)
 	if (input_key_went_down(input, InputKey::keyboard_t))
 	{
 		engine.paused = !engine.paused;
+	}
+
+	if (input_key_went_down(input, InputKey::keyboard_k))
+	{
+		game_reset_timeline(engine);
 	}
 
 	if (input_key_went_down(input, InputKey::keyboard_r) && input_key_is_down(input, InputKey::keyboard_left_control))
@@ -400,23 +405,18 @@ void update_engine(Engine & engine)
 		jobs.wait();
 
 		update_clouds(engine.clouds, engine.clock.scaled_delta_time);
-		update_rats(engine.rats, engine.world, engine.character.position, engine.clock.scaled_delta_time);
-		update_rats(engine.rats_2, engine.world, engine.character.position, engine.clock.scaled_delta_time);
+		TIME_FUNCTION_2("update rats 1", update_rats(engine.rats, engine.world, engine.character.position, engine.clock.scaled_delta_time));
+		TIME_FUNCTION_2("update rats 2", update_rats(engine.rats_2, engine.world, engine.character.position, engine.clock.scaled_delta_time));
 	}
 
 	// These need to be stored back, since we use them as values here, not pointers
 	engine.character = characters[0];
 	engine.debug_character = characters[1];
 
-	// ------------------------------------------------------------------------
-
-	float3 character_bounds_min = engine.character.position + float3(-0.5, 0.5, -0.5) * engine.character.size;
-	float3 character_bounds_max = engine.character.position + float3(0.5, 2, 0.5) * engine.character.size;
-
-	float3 island_1_min = engine.world_settings.island_1_position;
-	float3 island_1_max = engine.world_settings.island_1_position + engine.world_settings.island_1_size;
-
-	engine.debug.collision = test_AABB_against_AABB(character_bounds_min, character_bounds_max, island_1_min, island_1_max);
+	if (engine.character.dead)
+	{
+		game_reset_timeline(engine);
+	}
 }
 
 void render_engine(Engine & engine)
@@ -487,8 +487,10 @@ void render_engine(Engine & engine)
 		// distance to camera and cull visibility like cone, and not sphere
 		float3 proximity_render_target = engine.character.position;
 
-		draw_rats(engine.rats, engine.renderer, proximity_render_target);
-		draw_rats(engine.rats_2, engine.renderer, proximity_render_target);
+		prepare_frame(engine.rat_renderer, engine.draw_options.voxel_settings, proximity_render_target);
+
+		draw_rats(engine.rats, engine.rat_renderer);
+		draw_rats(engine.rats_2, engine.rat_renderer);
 
 	TIMER_END(engine.timings, draw_to_octree);
 
@@ -544,8 +546,9 @@ void render_engine(Engine & engine)
 	draw_list.add(engine.renderer.player_voxel_object);
 	draw_list.add(engine.renderer.npc_voxel_object);
 	draw_list.add(engine.renderer.grass_voxel_object);
-	draw_list.add(engine.rats.renderer.voxel_object);
-	draw_list.add(engine.rats_2.renderer.voxel_object);
+	draw_list.add(engine.rat_renderer.voxel_object);
+	// draw_list.add(engine.rats.renderer.voxel_object);
+	// draw_list.add(engine.rats_2.renderer.voxel_object);
 
 	for (int i = 0; i < renderer.cloud_count; i++)
 	{
@@ -626,18 +629,25 @@ void render_engine(Engine & engine)
 		graphics_buffer_apply(
 			graphics,
 			renderer.voxel_data_buffer_handle,
-			engine.rats.renderer.voxel_object.map.data_start * sizeof(VoxelData),
-			engine.rats.renderer.voxel_object.map.nodes.memory_size(),
+			engine.rat_renderer.voxel_object.map.data_start * sizeof(VoxelData),
+			engine.rat_renderer.voxel_object.map.nodes.memory_size(),
 			true
 		);
+		// graphics_buffer_apply(
+		// 	graphics,
+		// 	renderer.voxel_data_buffer_handle,
+		// 	engine.rats.renderer.voxel_object.map.data_start * sizeof(VoxelData),
+		// 	engine.rats.renderer.voxel_object.map.nodes.memory_size(),
+		// 	true
+		// );
 
-		graphics_buffer_apply(
-			graphics,
-			renderer.voxel_data_buffer_handle,
-			engine.rats_2.renderer.voxel_object.map.data_start * sizeof(VoxelData),
-			engine.rats_2.renderer.voxel_object.map.nodes.memory_size(),
-			true
-		);
+		// graphics_buffer_apply(
+		// 	graphics,
+		// 	renderer.voxel_data_buffer_handle,
+		// 	engine.rats_2.renderer.voxel_object.map.data_start * sizeof(VoxelData),
+		// 	engine.rats_2.renderer.voxel_object.map.nodes.memory_size(),
+		// 	true
+		// );
 
 		// apply dynamic objects
 		for (int i = 0; i < renderer.placed_dynamic_chunk_count; i++)
@@ -676,6 +686,9 @@ void render_engine(Engine & engine)
 void shutdown_engine(Engine & engine)
 {
 	Serializer::to_file(engine, Engine::save_filenme);
+
+	cleanup(engine.rats, engine.persistent_allocator);
+	cleanup(engine.rats_2, engine.persistent_allocator);
 
 	graphics_destroy_buffer(engine.graphics, engine.renderer.voxel_object_buffer_handle);
 	graphics_destroy_buffer(engine.graphics, engine.renderer.voxel_data_buffer_handle);
@@ -767,9 +780,15 @@ void engine_gui(Engine & engine)
 
 		Separator();
 
+		display(engine.timings_2);
+
+		Separator();
+
 		display("Timings", engine.timings);
 
 		Separator();
+
+
 
 		if (Button("Game camera"))
 		{

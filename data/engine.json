@@ -11,9 +11,9 @@
         },
         "jump_power": 6.0,
         "position": {
-            "x": 28.39470100402832,
-            "y": 14.76028823852539,
-            "z": 14.985234260559082
+            "x": 9.912814140319824,
+            "y": 12.33970832824707,
+            "z": 4.922389984130859
         },
         "size": 1.0,
         "speed": 6.0,
@@ -22,7 +22,7 @@
             "y": 17.940000534057617,
             "z": 10.0
         },
-        "y_position": 14.76028823852539,
+        "y_position": 12.33970832824707,
         "y_velocity": 0.0
     },
     "cloud_settings": {
@@ -76,13 +76,13 @@
     "draw_options": {
         "debug_options": {
             "w": 0.0,
-            "x": 0.5,
+            "x": 0.800000011920929,
             "y": 10.0,
-            "z": 1.159999966621399
+            "z": 0.328000009059906
         },
         "draw_flags": 0,
         "draw_method": 0,
-        "draw_mode": 0,
+        "draw_mode": 1,
         "voxel_settings": {
             "chunks_in_unit": 0.8999999761581421,
             "voxels_in_chunk": 10
@@ -90,24 +90,24 @@
     },
     "editor_camera_controller": {
         "move_speed": 10.0,
-        "pan": 16196.861328125,
+        "pan": 17875.474609375,
         "position": {
-            "x": 18.305282592773438,
-            "y": 36.847145080566406,
-            "z": -15.835143089294434
+            "x": 39.16677474975586,
+            "y": 18.067890167236328,
+            "z": 11.611281394958496
         },
-        "tilt": -4640.8291015625
+        "tilt": -4661.7294921875
     },
     "game_camera_controller": {
         "distance": 15.0,
         "move_speed": 10.0,
-        "pan": 30875.625,
+        "pan": 52162.79296875,
         "position": {
-            "x": 41.10892868041992,
-            "y": 22.620267868041992,
-            "z": 13.732571601867676
+            "x": 18.451717376708984,
+            "y": 17.396465301513672,
+            "z": -6.325556755065918
         },
-        "tilt": 31.600852966308594
+        "tilt": 19.701330184936523
     },
     "grass_settings": {
         "chunk_world_position": {
@@ -205,8 +205,8 @@
             "z": 0.27715304493904114
         },
         "sun_angle": {
-            "x": -26.540000915527344,
-            "y": 20.0
+            "x": -26.53700065612793,
+            "y": 45.0
         },
         "sun_color": {
             "x": 1.1764706373214722,
@@ -260,6 +260,9 @@
         "seed": 1
     },
     "rat_settings": {
+        "attack_strike_distance": 0.0,
+        "avoid_distance": 0.5,
+        "behaviour": 0,
         "colors": {
             "points": [
                 {
@@ -300,29 +303,32 @@
                 }
             ]
         },
-        "count": 500,
+        "count": 600,
         "remove_after_fall_height": -20.0,
         "spawn_position": {
             "x": 6.25600004196167,
             "y": 12.940999984741211,
             "z": 12.0
         },
-        "spawn_rate_per_second": 5.0,
+        "spawn_rate_per_second": 60.0,
         "speed": 3.0,
-        "start_escape_distance": 3.0,
-        "stop_escape_distance": 5.0,
+        "start_interact_distance": 3.0,
+        "stop_interact_distance": 5.0,
         "world_max": {
             "x": 10.0,
             "y": 16.0,
             "z": 20.0
         },
         "world_min": {
-            "x": 0.0,
+            "x": -5.0,
             "y": 12.0,
             "z": 0.0
         }
     },
     "rat_settings_2": {
+        "attack_strike_distance": 2.0,
+        "avoid_distance": 1.0,
+        "behaviour": 1,
         "colors": {
             "points": [
                 {
@@ -370,10 +376,10 @@
             "y": 16.399999618530273,
             "z": 12.289999961853027
         },
-        "spawn_rate_per_second": 8.0,
+        "spawn_rate_per_second": 60.0,
         "speed": 3.0,
-        "start_escape_distance": 2.0,
-        "stop_escape_distance": 3.0,
+        "start_interact_distance": 3.0,
+        "stop_interact_distance": 4.0,
         "world_max": {
             "x": 45.0,
             "y": 18.0,
@@ -464,12 +470,12 @@
             ]
         },
         "island_1_position": {
-            "x": 0.0,
+            "x": -5.827000141143799,
             "y": 10.0,
             "z": 0.0
         },
         "island_1_size": {
-            "x": 11.0,
+            "x": 18.0,
             "y": 8.0,
             "z": 22.0
         },

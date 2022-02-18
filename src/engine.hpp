@@ -50,7 +50,8 @@ struct Engine
 	bool show_imgui_demo = false;
 	bool show_imgui_style_editor = false;
 
-	Timings timings;
+	Timings timings = {};
+	Timings2 timings_2 = {};
 	Clock clock;
 	Statistics statistics = {};
 
@@ -77,6 +78,7 @@ struct Engine
 	GrassSystem grass 	= {};
 	Clouds clouds 		= {};
 
+	RatRenderer rat_renderer = {};
 	RatSystem rats 		= {};
 	RatSystem rats_2 	= {};
 

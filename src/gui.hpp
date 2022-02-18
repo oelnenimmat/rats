@@ -75,6 +75,20 @@ struct GuiHelper
 		return edited;
 	}
 
+	template<typename TEnum>
+	bool edit_enum(char const * label, TEnum * value)
+	{
+		ASSERT_NOT_NULL(value);
+
+		int int_value = static_cast<int>(*value);
+		bool edited = ImGui::Combo(label, &int_value, enum_names<TEnum>, enum_count<TEnum>);
+		if (edited)
+		{
+			*value = static_cast<TEnum>(int_value);
+		}
+		return edited;
+	}
+
 	// bool edit_float3(char const * label, float3 & v)
 	// {	
 	// 	bool edited = DragFloat3(label, &v);
