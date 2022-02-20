@@ -3,6 +3,7 @@
 #include "vectors.hpp"
 #include "random.hpp"
 #include "VoxelRenderer.hpp"
+#include "sdf.hpp"
 
 struct CloudSettings
 {
@@ -83,32 +84,12 @@ namespace gui
 	}
 }
 
-struct SphereSDF
-{
-	float3 center;
-	float radius;
-
-	float get_distance(float3 position)
-	{
-		return length(position - center) - radius;
-	}
-};
-
-// https://www.iquilezles.org/www/articles/distfunctions/distfunctions.htm
-float sdf_smooth_union(float distance_a, float distance_b, float factor)
-{
-    float h = rats::clamp(0.5f + 0.5f * (distance_b - distance_a) / factor, 0.0, 1.0);
-    return rats::lerp(distance_b, distance_a, h) - factor * h * (1.0 - h);
-}
-
-
-
 struct CloudSDF
 {
 	static constexpr int sphere_count = 20;
 	SphereSDF spheres [sphere_count];
 
-	float get_distance(float3 position)
+	float get_distance(float3 position) const
 	{
 		float distance = spheres[0].get_distance(position);
 
@@ -121,8 +102,6 @@ struct CloudSDF
 		return distance;
 	}
 };
-
-
 
 void generate_clouds(VoxelObject & cloud, VoxelSettings const & voxel_settings, float3 world_size)
 {
@@ -147,83 +126,7 @@ void generate_clouds(VoxelObject & cloud, VoxelSettings const & voxel_settings, 
 
 	int3 voxel_count = cloud.map.size_in_chunks * voxel_settings.voxels_in_chunk;
 
-	for(int z = 0; z < voxel_count.z; z++)
-	for(int y = 0; y < voxel_count.y; y++)
-	for(int x = 0; x < voxel_count.x; x++)
-	{
-
-		float3 point_LS = float3(x, y, z) * voxel_settings.VS_to_WS();
-		float value = sdf.get_distance(point_LS);
-
-		if (value < 0)
-		{
-			auto & node 	= get_node(cloud.map, x,y,z);
-			node.color 		= float4(1,1,1,1);
-			node.material() = 1;
-
-			// https://www.iquilezles.org/www/articles/normalsSDF/normalsSDF.htm
-			{
-				constexpr float h = 0.0001; // replace by an appropriate value
-				constexpr float2 k = float2(1,-1);
-				constexpr float3 k_xyy = float3(k.x, k.y, k.y);
-				constexpr float3 k_yyx = float3(k.y, k.y, k.x);
-				constexpr float3 k_yxy = float3(k.y, k.x, k.y);
-				constexpr float3 k_xxx = float3(k.x, k.x, k.x);
-
-				float3 normal = normalize(
-					k_xyy * sdf.get_distance( point_LS + k_xyy * h ) + 
-					k_yyx * sdf.get_distance( point_LS + k_yyx * h ) + 
-					k_yxy * sdf.get_distance( point_LS + k_yxy * h ) + 
-					k_xxx * sdf.get_distance( point_LS + k_xxx * h )
-				);
-
-				node.normal() = normal;
-			}
-		}
-	}
-
-/*
-	for (int i = 0; i < 30; i++)
-	{
-		float radius = random_float(0.4, max_radius, ease_in_cube);
-
-		float3 min_center_LS = float3(radius, radius, radius);
-		float3 max_center_LS = world_size - float3(radius, radius, radius);
-
-		float3 center_LS = random_float3(min_center_LS, max_center_LS);
-
-		float3 min_WS = center_LS - float3(radius, radius, radius);
-		float3 max_WS = center_LS + float3(radius, radius, radius);
-
-		int3 first_VS = int3(floor(min_WS * voxel_settings.WS_to_VS()));
-		int3 last_VS = int3(floor((max_WS + 1) * voxel_settings.WS_to_VS()));
-
-		for(int z = first_VS.z; z <= last_VS.z; z++)
-		for(int y = first_VS.y; y <= last_VS.y; y++)
-		for(int x = first_VS.x; x <= last_VS.x; x++)
-		{
-			float3 position_LS = float3(x,y,z) * voxel_settings.VS_to_WS();
-			float3 to_surface = position_LS - center_LS;
-
-			if (length(to_surface) > radius)
-			{
-				continue;
-			}
-
-			auto & node 	= get_node(cloud.map, x,y,z);
-			node.color 		= float4(1,1,1,1);
-			node.material() = 1;
-
-			// put a little softeninng nuance on spehers
-			// also we could just do more proper sdf --> voxel evaluation and smooth it
-			node.normal() 	= normalize(lerp(
-				normalize(to_surface),
-				normalize(position_LS - world_size / 2),
-				0.2
-			));
-		}
-	}
-*/
+	draw_sdf(cloud, voxel_settings, voxel_count, float4(1,1,1,1), sdf);
 }
 
 void init(Clouds & clouds, CloudSettings * settings)

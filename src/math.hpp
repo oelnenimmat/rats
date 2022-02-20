@@ -1,5 +1,10 @@
 #pragma once
 
+/*
+Todo:
+	protect against nans (and infs?)
+*/
+
 #include <cmath>
 
 // lol, should I or shold I not make a namespace for this engine???? Rats!
@@ -62,6 +67,20 @@ namespace rats
 	}
 
 
+}
+
+/*
+template <typename T>
+inline T smaller(T a, T b)
+{
+	return a < b ? a : b;
+}
+*/
+
+template <typename T>
+inline T bigger(T a, T b)
+{
+	return a > b ? a : b;
 }
 
 template <typename T>

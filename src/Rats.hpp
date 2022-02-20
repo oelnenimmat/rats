@@ -122,7 +122,8 @@ enum struct RatState
 	escape,
 	fall,
 	attack,
-	strike
+	strike,
+	stuck_on_player,
 };
 
 ENUM_NAMES_C_STRING(RatState)
@@ -133,6 +134,7 @@ ENUM_NAMES_C_STRING(RatState)
 	"fall",
 	"attack",
 	"strike",
+	"stuck_on_player",
 };
 
 struct Rat
@@ -143,6 +145,7 @@ struct Rat
 	float3 		move_target_position;
 	float3 		velocity;
 	float3 		strike_target_position;
+	float3 		stuck_target_position;
 };
 
 float3 move_rat_towards_position(
@@ -197,7 +200,6 @@ struct RatSystem
 
 	int alive_count() const { return spawned_count - gone_count; }
 
-
 	struct
 	{
 		int idle;
@@ -206,6 +208,7 @@ struct RatSystem
 		int attacking;
 		int falling;
 		int striking;
+		int stuck_on_player;
 	} counts;
 
 	int current_strike_count;
@@ -216,6 +219,7 @@ void reset(RatSystem & rats)
 	rats.cumulative_spawn_time 	= 0;
 	rats.spawned_count 			= 0;
 	rats.gone_count 			= 0;
+	rats.current_strike_count 	= 0;
 }
 
 void discard_rat(RatSystem & rats, int index)
@@ -261,6 +265,7 @@ namespace gui
 		Value("attacking", rats.counts.attacking);
 		Value("striking", rats.counts.striking);
 		Value("falling", rats.counts.falling);
+		Value("stuck_on_player", rats.counts.stuck_on_player);
 
 		if (Button("Generate"))
 		{
@@ -339,6 +344,7 @@ void update_rats(
 	RatSystem & rats,
 	World const & world,
 	float3 player_position,
+	bool player_jumps,
 	float delta_time
 )
 {
@@ -381,7 +387,7 @@ void update_rats(
 		float3 & rat_position = rats.positions[i];
 
 		if ((rat.state == RatState::idle || rat.state == RatState::moving) &&
-		 length(rat_position - player_position) < rats.settings.start_interact_distance)
+		 	length(rat_position - player_position) < rats.settings.start_interact_distance)
 		{
 			switch(rats.settings.behaviour)
 			{
@@ -395,7 +401,7 @@ void update_rats(
 			}
 		}
 
-		if (rat.state != RatState::strike && rat.state != RatState::fall)
+		if (rat.state != RatState::strike && rat.state != RatState::fall && rat.state != RatState::stuck_on_player)
 		{
 			float walkable_terrain_height;
 			bool above_walkable_terrain = get_closest_height_below_position(
@@ -587,7 +593,7 @@ void update_rats(
 				if (distance_to_target < rats.settings.attack_strike_distance)
 				{
 					rat.state = RatState::strike;
-					rat.strike_target_position = player_position + float3(0, random_float(1.0f, 1.5f), 0);
+					rat.strike_target_position = player_position + float3(0, random_float(0.8f, 1.8f), 0);
 				}
 				else if (distance_to_target > rats.settings.stop_interact_distance)
 				{
@@ -608,24 +614,37 @@ void update_rats(
 				rat_position += movement;
 				to_target -= movement;
 
+				constexpr float radius = 0.8;
+				// hit target player
+				if (length(rat_position.xz - player_position.xz) < radius)
+				{
+					rat.state = RatState::stuck_on_player;
+					rat.stuck_target_position = rat_position - player_position;
+				}
+
 				if (length(to_target) < 0.1)
 				{
-					// hit target player
-					if (length(rat_position.xz - player_position.xz) < 0.1)
-					{
-						rats.current_strike_count += 1;
-						rat.state = RatState::escape;
-					}
-
-					// miss target player 
-					else
-					{
-						rat.state = RatState::fall;
-						rat.velocity = (rat_position - position_before) / delta_time;
-					}
-
+					rat.state = RatState::fall;
+					rat.velocity = (rat_position - position_before) / delta_time;
 				}
 				
+			} break;
+
+			case RatState::stuck_on_player:
+			{
+				rats.counts.stuck_on_player += 1;
+
+				if (player_jumps)
+				{
+					rat.state = RatState::fall;
+					rat.velocity = player_position + rat.stuck_target_position - rat_position;
+				}
+				else
+				{
+					rats.current_strike_count += 1;
+					rat_position = player_position + rat.stuck_target_position;
+				}
+
 			} break;
 		}
 	}

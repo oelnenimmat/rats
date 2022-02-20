@@ -71,25 +71,46 @@ struct Character
 	float jump_power = 10;
 	float3 color;
 	float speed;
+	int rat_capacity = 1;
 
 	// state
 	// $Title: State
 	float3 position;
 	float y_position;
 	float y_velocity;
+	int rat_stuck_count; // 
 
 	// external interface thing, computed in update
 	float3 grounded_position;
 
+	int death_animation_index = 0;
+	float death_animation_timer = 0;
+
+	bool almost_dead_by_rats = false;
+	bool falling_down = false;
 	bool dead = false;
+
+	float3 last_move_direction;
+
+	int debug_animation_index;
+
+	struct
+	{
+		bool just_almost_died_by_rats;
+	} events;
 };
 
 void reset(Character & character)
 {
-	character.position 		= character.start_position;
-	character.y_position 	= character.start_position.y;
-	character.y_velocity 	= 0;
-	character.dead 			= false;
+	character.position 				= character.start_position;
+	character.y_position 			= character.start_position.y;
+	character.y_velocity 			= 0;
+	character.dead 					= false;
+	character.falling_down 			= false;
+	character.almost_dead_by_rats 	= false;
+	character.death_animation_index = 0;
+	character.death_animation_timer = 0;
+	character.rat_stuck_count 		= 0;
 }
 
 inline SERIALIZE_STRUCT(Character const & character)
@@ -97,6 +118,7 @@ inline SERIALIZE_STRUCT(Character const & character)
 	serializer.write("start_position", character.start_position);
 	serializer.write("position", character.position);
 	serializer.write("speed", character.speed);
+	serializer.write("rat_capacity", character.rat_capacity);
 	serializer.write("y_position", character.y_position);
 	serializer.write("y_velocity", character.y_velocity);
 	serializer.write("jump_power", character.jump_power);
@@ -109,6 +131,7 @@ inline DESERIALIZE_STRUCT(Character & character)
 	serializer.read("start_position", character.start_position);
 	serializer.read("position", character.position);
 	serializer.read("speed", character.speed);
+	serializer.read("rat_capacity", character.rat_capacity);
 	serializer.read("y_position", character.y_position);
 	serializer.read("y_velocity", character.y_velocity);
 	serializer.read("jump_power", character.jump_power);
@@ -126,6 +149,10 @@ namespace gui
 		Text("Properties");
 		gui.edit("start_position", character.start_position);
 		gui.edit("speed", character.speed);
+		if (gui.edit("rat_capacity", character.rat_capacity))
+		{
+			character.rat_capacity = bigger(1, character.rat_capacity);
+		}
 		gui.edit("size", character.size);
 		gui.edit("color", character.color, META_MEMBER_FLAGS_COLOR);
 		gui.edit("jump_power", character.jump_power);
@@ -135,6 +162,12 @@ namespace gui
 		gui.edit("position", character.position);
 		gui.edit("y_position", character.y_position);
 		gui.edit("y_velocity", character.y_velocity);
+
+		gui.edit("debug_animation_index", character.debug_animation_index);
+
+		Value("rats stuck", character.rat_stuck_count);
+		Value("almost_dead_by_rats", character.almost_dead_by_rats);
+		Value("death_animation_index", character.death_animation_index);
 
 		return gui.dirty;
 	}
@@ -165,12 +198,34 @@ struct CharacterUpdateJob
 		Character & character 			= characters[i];
 		CharacterInput const & input 	= inputs[i];
 
+		character.events = {};
+
+		if (character.almost_dead_by_rats)
+		{
+			character.death_animation_timer += delta_time;
+			character.death_animation_index = (int)std::floor(character.death_animation_timer / 1.2f);
+
+			if (character.death_animation_index > 1)
+			{
+				character.dead = true;
+			}
+
+			return;
+		}
+
 		if (input.reset)
 		{
 			reset(character);
 		}
 
-		float3 movement = float3(input.move_x, 0, input.move_z) * delta_time * character.speed;
+		float rat_factor = 1.0f - rats::clamp((float)character.rat_stuck_count / character.rat_capacity, 0.0f, 1.0f);
+
+		float3 movement = float3(input.move_x, 0, input.move_z) * delta_time * character.speed * rat_factor;
+
+		if (sqr_length(movement) > 0)
+		{
+			character.last_move_direction = normalize(movement);
+		}
 
 		float3 move_end_position = character.position + movement;
 
@@ -206,6 +261,12 @@ struct CharacterUpdateJob
 		
 		if (character.y_position < -30)
 		{
+			character.falling_down = true;
+			// character.dead = true;
+		}
+
+		if (character.y_position < -120)
+		{
 			character.dead = true;
 		}
 
@@ -225,6 +286,13 @@ struct CharacterUpdateJob
 		}
 
 		character.grounded_position = move_end_position;
+
+		if (character.rat_stuck_count >= character.rat_capacity)
+		{
+			puts("character almost ded\n\t... by rats\n");
+			character.almost_dead_by_rats = true;
+			character.events.just_almost_died_by_rats = true;
+		}
 	}
 };
 

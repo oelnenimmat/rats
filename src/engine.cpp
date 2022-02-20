@@ -133,23 +133,22 @@ void engine_recreate_world(Engine & engine)
 	int3 chunks_in_character 	= int3(1,2,1);
 	engine.renderer.player_voxel_object.map.dispose();
 	engine.renderer.player_voxel_object = allocate_voxel_object(engine.renderer, chunks_in_character);
-	TIME_FUNCTION(
-		draw_cuboid(
-			engine.renderer,
-			engine.character.size,
-			engine.character.color,
-			engine.renderer.player_voxel_object
-		),
-		engine.timings.draw_character
+	draw_sdf(
+		engine.renderer.player_voxel_object,
+		engine.draw_options.voxel_settings,
+		chunks_in_character * engine.draw_options.voxel_settings.voxels_in_chunk,
+		float4(engine.character.color, 1),
+		CapsuleSDF{ float3(0.5, 0.5, 0.5), float3(0.5, 1.5, 0.5), 0.5}
 	);
 
 	engine.renderer.npc_voxel_object.map.dispose();
 	engine.renderer.npc_voxel_object = allocate_voxel_object(engine.renderer, chunks_in_character);
-	draw_cuboid(
-		engine.renderer,
-		engine.debug_character.size,
-		engine.debug_character.color,
-		engine.renderer.npc_voxel_object
+	draw_sdf(
+		engine.renderer.npc_voxel_object,
+		engine.draw_options.voxel_settings,
+		chunks_in_character * engine.draw_options.voxel_settings.voxels_in_chunk,
+		float4(engine.debug_character.color, 1),
+		CapsuleSDF{ float3(0.5, 0.5, 0.5), float3(0.5, 1.5, 0.5), 0.5}
 	);
 
 	/// this needs to be allocated also, even though we don't write any data yet
@@ -340,9 +339,12 @@ void update_engine(Engine & engine)
 			engine.game_camera_controller,
 			engine.camera,
 			get_camera_input(input, engine.input_settings, unscaled_delta_time),
-			game_camera_target_position
+			game_camera_target_position,
+			engine.character.falling_down
 		);
 	}
+
+	engine.character.rat_stuck_count = engine.rats.current_strike_count + engine.rats_2.current_strike_count;
 
 	Character characters [] = { engine.character, engine.debug_character };
 
@@ -357,7 +359,6 @@ void update_engine(Engine & engine)
 		get_debug_input_for_character(engine.debug_character_state_controller, engine.clock.scaled_delta_time) 
 	};
 	int character_count = 2;
-	// int character_count = 1;
 
 	auto character_update_job = CharacterUpdateJob
 	{
@@ -375,20 +376,8 @@ void update_engine(Engine & engine)
 		),
 		.delta_time 	= scaled_delta_time,
 	};
-	jobs.enqueue(character_update_job, character_count);
-
-	// auto mouse_update_job = MouseUpdateJob
-	// {
-	// 	.mouses 		= engine.mouses,
-	// 	.terrain 		= &engine.debug_terrain,
-	// 	.delta_time 	= scaled_delta_time,
-	// 	.min_position 	= float3(0.5, 0.5, 0.5),
-	// 	.max_position 	= float3(
-	// 		engine.world_settings.world_size - 0.5f,
-	// 		engine.world_settings.world_size - 0.5f,
-	// 		engine.world_settings.world_size - 0.5f
-	// 	)
-	// };
+	// jobs.enqueue(character_update_job, character_count);
+	run_job(character_update_job, character_count);
 
 	// jobs.enqueue_parallel(mouse_update_job, array_length(engine.mouses));
 	run_job_parallel(
@@ -404,14 +393,47 @@ void update_engine(Engine & engine)
 		jobs.execute();
 		jobs.wait();
 
-		update_clouds(engine.clouds, engine.clock.scaled_delta_time);
-		TIME_FUNCTION_2("update rats 1", update_rats(engine.rats, engine.world, engine.character.position, engine.clock.scaled_delta_time));
-		TIME_FUNCTION_2("update rats 2", update_rats(engine.rats_2, engine.world, engine.character.position, engine.clock.scaled_delta_time));
+		TIME_FUNCTION_2("update_clouds", update_clouds(engine.clouds, engine.clock.scaled_delta_time));
+		
+		float3 offset_character_position = engine.character.position;
+		bool player_jumps = single_player_character_input.jump;
+		TIME_FUNCTION_2("update rats 1", update_rats(engine.rats, engine.world, offset_character_position, player_jumps, engine.clock.scaled_delta_time));
+		TIME_FUNCTION_2("update rats 2", update_rats(engine.rats_2, engine.world, offset_character_position, player_jumps, engine.clock.scaled_delta_time));
 	}
 
 	// These need to be stored back, since we use them as values here, not pointers
 	engine.character = characters[0];
 	engine.debug_character = characters[1];
+
+	if (engine.character.events.just_almost_died_by_rats)
+	{
+		float3 bottom = float3(0.5, 0.5, 0.5);
+		float3 head_0 = bottom + normalize(float3(1,1,1));
+		float3 head_1 = bottom + normalize(float3(1,0,1));
+
+		engine.renderer.player_death_animation[0].map.dispose();
+		engine.renderer.player_death_animation[1].map.dispose();
+		
+		engine.renderer.player_death_animation[0] = allocate_voxel_object(engine.renderer, int3(2,2,2));
+		engine.renderer.player_death_animation[1] = allocate_voxel_object(engine.renderer, int3(2,2,2));
+
+		draw_sdf(
+			engine.renderer.player_death_animation[0],
+			engine.draw_options.voxel_settings,
+			int3(2,2,2) * engine.draw_options.voxel_settings.voxels_in_chunk,
+			float4(engine.character.color, 1),
+			CapsuleSDF{ bottom, head_0, 0.5}
+		);
+
+		draw_sdf(
+			engine.renderer.player_death_animation[1],
+			engine.draw_options.voxel_settings,
+			int3(2,2,2) * engine.draw_options.voxel_settings.voxels_in_chunk,
+			float4(engine.character.color, 1),
+			CapsuleSDF{ bottom, head_1, 0.5}
+		);
+
+	}
 
 	if (engine.character.dead)
 	{
@@ -543,7 +565,41 @@ void render_engine(Engine & engine)
 
 	draw_list.add(engine.renderer.island_1);
 	draw_list.add(engine.renderer.island_2);
-	draw_list.add(engine.renderer.player_voxel_object);
+
+	if (engine.character.debug_animation_index == 0)
+	{
+		if (engine.character.almost_dead_by_rats == false)
+		{
+			draw_list.add(engine.renderer.player_voxel_object);
+		}
+		else
+		{
+			int frame_index = engine.character.death_animation_index == 0 ? 0 : 1;
+			VoxelObject & current = engine.renderer.player_death_animation[frame_index];
+			
+			update_position(
+				current,
+				engine.renderer.draw_options->voxel_settings,
+				engine.character.position
+			);		
+
+			draw_list.add(current);
+		}
+	}
+	else
+	{
+		int frame_index = engine.character.debug_animation_index == 1 ? 0 : 1;
+		VoxelObject & current = engine.renderer.player_death_animation[frame_index];
+			
+		update_position(
+			current,
+			engine.renderer.draw_options->voxel_settings,
+			engine.character.position
+		);		
+
+		draw_list.add(current);
+	}
+
 	draw_list.add(engine.renderer.npc_voxel_object);
 	draw_list.add(engine.renderer.grass_voxel_object);
 	draw_list.add(engine.rat_renderer.voxel_object);
@@ -615,6 +671,25 @@ void render_engine(Engine & engine)
 					false
 				);
 			}
+		}
+
+		if (engine.character.events.just_almost_died_by_rats)
+		{
+			graphics_buffer_apply(
+				graphics,
+				renderer.voxel_data_buffer_handle,
+				renderer.player_death_animation[0].map.data_start * sizeof(VoxelData),
+				renderer.player_death_animation[0].map.nodes.memory_size(),
+				false
+			);
+
+			graphics_buffer_apply(
+				graphics,
+				renderer.voxel_data_buffer_handle,
+				renderer.player_death_animation[1].map.data_start * sizeof(VoxelData),
+				renderer.player_death_animation[1].map.nodes.memory_size(),
+				false
+			);
 		}
 
 		// this is updated every frame, so it needs to be applied every frame

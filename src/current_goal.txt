@@ -1,20 +1,13 @@
-Current goal
+Current goal:
 
+player respawns on a distinct location
 
-mvp game:
-	player dies
-		from k button
-		from rats' attack
-		from falling
+rats change behaviour on different zone
+	-> also one rat system only
+	-> different spawn points do same as multiple systems now
+	-> later: scatter rats around when player comes to new area, they are not simulated when player is away
 
-	player respawns
-		player respawns on a distinct location
-
-	rats attack on other island
-		make island look different
-			generated city ground tiles etc.
-
-
+rats react to other characters too
 
 rats:
 proximity renderer

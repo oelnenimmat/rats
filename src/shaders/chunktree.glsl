@@ -539,7 +539,8 @@ vec4 _traverse_chunktree(const Ray ray, float max_distance, int map_index, out f
 				// gi_specular = vec3(0,0,0);
 
 				vec3 shadow_ray_direction = -light_direction;
-				vec3 shadow_ray_origin = voxel_center_WS + normal_offset * shadow_ray_direction;
+				vec3 shadow_ray_origin = position_WS + normal_offset * shadow_ray_direction;
+				// vec3 shadow_ray_origin = voxel_center_WS + normal_offset * shadow_ray_direction;
 
 				Ray shadow_ray;
 				shadow_ray.direction 			= shadow_ray_direction;
@@ -605,7 +606,8 @@ vec4 _traverse_chunktree(const Ray ray, float max_distance, int map_index, out f
 				vec3 voxel_center_WS 	= (vec3(voxel) + vec3(0.5, 0.5, 0.5)) * VS_to_WS;
 
 				vec3 shadow_ray_direction = -light_direction;
-				vec3 shadow_ray_origin = voxel_center_WS + normal_offset * shadow_ray_direction;
+				vec3 shadow_ray_origin = position_WS + normal_offset * shadow_ray_direction;
+				// vec3 shadow_ray_origin = voxel_center_WS + normal_offset * shadow_ray_direction;
 
 				Ray shadow_ray;
 				shadow_ray.direction 			= shadow_ray_direction;

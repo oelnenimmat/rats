@@ -59,57 +59,49 @@ namespace gui
 	}
 }
 
-void update_game_camera(GameCameraController & controller, Camera & camera, CameraInput const & input, float3 target_position)
+void update_game_camera(GameCameraController & controller, Camera & camera, CameraInput const & input, float3 target_position, bool player_falling_down)
 {
-	controller.pan += input.look.x;
-	controller.tilt += input.look.y;
-
-	float camera_angle_radians = rats::to_radians(controller.pan);
-	float s = sin(camera_angle_radians);
-	float c = cos(camera_angle_radians);
-
-	float4x4 pan_transform =
+	if (player_falling_down)
 	{
-		c, 0, -s, 0,
-		0, 1, 0, 0,
-		s, 0, c, 0,
-		0, 0, 0, 1
-	};
 
-	float tilt_angle_radians = rats::to_radians(controller.tilt);
-	float ts = sin(tilt_angle_radians);
-	float tc = cos(tilt_angle_radians);
-
-	float4x4 tilt_transform =
+	}
+	else
 	{
-		1, 0, 0, 0,
-		0, tc, ts, 0,
-		0, -ts, tc, 0,
-		0, 0, 0, 1
-	};
+		controller.pan += input.look.x;
+		controller.tilt += input.look.y;
 
-	// Note(Leo): this is like "rotation_YXZ"???
-	// multiply_matrix(pan_transform, tilt_transform, controller.view_matrix);
-	controller.view_matrix = pan_transform * tilt_transform;
+		float camera_angle_radians = rats::to_radians(controller.pan);
+		float s = sin(camera_angle_radians);
+		float c = cos(camera_angle_radians);
 
+		float4x4 pan_transform =
+		{
+			c, 0, -s, 0,
+			0, 1, 0, 0,
+			s, 0, c, 0,
+			0, 0, 0, 1
+		};
 
-	// float3 movement = float3(input.move.x, 0, input.move.z);
-	// movement = multiply_vector(controller.view_matrix.values, movement);
-	// movement.y += input.move.y;
+		float tilt_angle_radians = rats::to_radians(controller.tilt);
+		float ts = sin(tilt_angle_radians);
+		float tc = cos(tilt_angle_radians);
 
-	// float movement_length = length(movement);
-	// if (movement_length > 1)
-	// {
-	// 	movement /= movement_length;
-	// }
-	// movement *= input.delta_time * controller.move_speed;
+		float4x4 tilt_transform =
+		{
+			1, 0, 0, 0,
+			0, tc, ts, 0,
+			0, -ts, tc, 0,
+			0, 0, 0, 1
+		};
 
-	controller.position = target_position + controller.forward() * -controller.distance;
+		// Note(Leo): this is like "rotation_YXZ"???
+		controller.view_matrix = pan_transform * tilt_transform;
 
-	controller.view_matrix.column(3) = float4(controller.position, 1);
-	// get_column(controller.view_matrix.values, 3) = float4(controller.position, 1);
+		controller.position = target_position + controller.forward() * -controller.distance;
 
-	camera.view_matrix = controller.view_matrix;
+		controller.view_matrix.column(3) = float4(controller.position, 1);
+		camera.view_matrix = controller.view_matrix;
+	}
 }
 
 // These must be same as in Coordinates, now that we have named them.

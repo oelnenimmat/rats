@@ -129,6 +129,8 @@ struct VoxelRenderer
 	VoxelObject player_voxel_object;
 	VoxelObject npc_voxel_object;
 
+	VoxelObject player_death_animation [2];
+
 	VoxelObject grass_voxel_object;
 	// VoxelObject rats_voxel_object;
 	// VoxelObject rats_2_voxel_object;
